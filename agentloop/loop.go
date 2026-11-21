@@ -1,0 +1,359 @@
+// Package agentloop —— 可恢复的模型↔工具**回合循环**。
+//
+// # 它把哪些机制件串成一条链
+//
+//   chat.Model（供应商中立）⇄ 本循环 ⇄ pipeline（副作用施加）
+//   每回合/每工具后 checkpoint 落快照（中断后从存储恢复，不重放副作用）
+//   回合前 roundguard 判额度（预算用尽按策略强制收尾或停止）
+//   全程经 Emitter 出事件（embedded 广播 / standalone 落库）
+//
+// # 恢复语义（本包的要点）
+//
+// 会话历史整体序列化进 checkpoint 快照（Fields["history"]）。进程死在
+// 任意两个 commit 之间时，恢复点要么包含完整的「assistant 工具请求 +
+// tool 结果回填」，要么两者都不包含——因为回填与提交在同一段顺序代码里。
+// 恢复时若读到**不完整**的历史（assistant 请求了工具但结果缺失），视为
+// 存储被外部篡改，fail-closed 报错，不猜。
+//
+// # 幂等键与 toolCallID
+//
+// 模型响应里的每个工具调用，ID 由编排侧（NewID）在入历史**之前**铸造：
+// 它是 pipeline 副作用幂等键的原材料，恢复重放时同一调用必须同键——
+// 否则闸把它当成另一个动作，重复施加的防护就漏了。
+package agentloop
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"sync/atomic"
+	"time"
+
+	"github.com/oekit/pkg/errors"
+
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/roundguard"
+
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
+)
+
+// fieldHistory 快照 Fields 里会话历史的键。
+const fieldHistory = "history"
+
+// 事件类型词表（eventbus typ 字段取值）。
+const (
+	EventRoundStart   = "agent.round_start"
+	EventToolCall     = "agent.tool_call"
+	EventRoundEnd     = "agent.round_end"
+	EventSessionState = "agent.session_status"
+)
+
+// Emitter 事件发射面。eventbus.DurablePublisher 与本包的 busEmitter
+// 都满足它；nil = 不出事件。
+type Emitter interface {
+	Publish(ctx context.Context, sessionID, caseID string, stepID *uint64, typ, level string, payload map[string]any) error
+}
+
+// Config 装配一个循环。Model/Store/Tools 缺一即装配期编程错误。
+type Config struct {
+	// Model 供应商中立的模型调用面（必填）。
+	Model chat.Model
+	// Tools 工具施加管线（必填）。
+	Tools *pipeline.Pipeline
+	// Store 进度快照存储（必填；恢复点与历史走这里）。
+	Store checkpoint.StoreCAS
+	// Emitter 事件发射面；nil 时用 Bus（可再 nil = 完全不出事件）。
+	Emitter Emitter
+	// Bus embedded 形态的默认事件面（Emitter 为 nil 时生效）。
+	Bus *eventbus.Bus
+	// Budget 回合/工具额度。零值 = 全部不限。
+	Budget roundguard.Budget
+	// System 可选系统提示（新会话的第一条消息）。
+	System string
+	// NewID 工具调用 ID 铸造器；nil = 默认（crypto/rand + 进程内回退）。
+	NewID func() string
+}
+
+// Result 一次 Run 的结果。
+type Result struct {
+	// Status contract 状态词表（succeeded / failed / timed_out）。
+	Status string
+	// Final 终答文本（Status=succeeded 时有值）。
+	Final string
+	// Rounds 实际回合数（模型调用次数）。
+	Rounds int
+	// ToolCalls 实际工具调用次数。
+	ToolCalls int
+	// Uncertain 结果未知的 toolCallID（须先对账，禁止盲目重试）。
+	Uncertain []string
+}
+
+// Loop 可恢复的回合循环。
+//
+// 同一 Loop 的 Run 不得并发调用：快照序号（seq）是进程内单调游标，
+// 并发 Run 同一 sessionID 须由调用方串行化（或各用各的 Loop 共享存储）。
+type Loop struct {
+	cfg       Config
+	gate      *checkpoint.SeqGate
+	committer *checkpoint.Committer
+	seq       uint64
+	fallback  atomic.Uint64
+}
+
+// New 装配循环（装配期校验，fail fast）。
+func New(cfg Config) (*Loop, error) {
+	if cfg.Model == nil {
+		return nil, errors.New("循环缺模型面（nil Model = 没有回合的另一端）")
+	}
+	if cfg.Tools == nil {
+		return nil, errors.New("循环缺工具管线（nil Tools = 模型请求工具无人拦）")
+	}
+	if cfg.Store == nil {
+		return nil, errors.New("循环缺进度快照存储（nil Store = 中断不可恢复）")
+	}
+	if err := cfg.Budget.Validate(); err != nil {
+		return nil, errors.Wrap(err, "回合预算非法（负额度不许静默降级为不限）")
+	}
+	if cfg.Emitter == nil && cfg.Bus != nil {
+		cfg.Emitter = busEmitter{bus: cfg.Bus}
+	}
+	l := &Loop{cfg: cfg, gate: checkpoint.NewSeqGate()}
+	l.committer = checkpoint.NewCommitter(l.gate, cfg.Store)
+	return l, nil
+}
+
+// Run 执行（或续跑）一个会话回合链。
+//
+// sessionID 是快照 RunID：同一 sessionID 的多次 Run 共享历史——进程重启后
+// 用同一 ID 再 Run 即恢复。user 是本次的用户输入（追加到历史尾部）。
+func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error) {
+	// 回灌序号基线：进程内单调闸重启后是空的，不回灌则陈旧快照能盖掉新进度。
+	if err := l.committer.SeedFromStore(ctx, sessionID); err != nil {
+		return nil, errors.Wrap(err, "回灌快照序号基线失败", "session", sessionID)
+	}
+	messages, done, err := l.loadHistory(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	messages = append(messages, chat.Message{Role: chat.RoleUser, Content: user})
+
+	used := roundguard.Used{Tools: map[string]int{}}
+	res := &Result{Status: contract.StatusRunning}
+	forced := false // 收尾轮标记：预算用尽后给模型的最后一次机会
+
+	for {
+		if !forced {
+			v := roundguard.CheckRounds(l.cfg.Budget, used)
+			if !v.Allowed {
+				if l.cfg.Budget.EffectivePolicy() == roundguard.PolicyForceFinal {
+					forced = true
+					messages = append(messages, chat.Message{
+						Role:    chat.RoleUser,
+						Content: "预算已用尽：请基于已有信息立即给出最终回答，不要再调用工具。",
+					})
+				} else {
+					res.Status = contract.StatusTimedOut
+					break
+				}
+			}
+		}
+
+		resp, err := l.cfg.Model.Chat(ctx, chat.ChatRequest{
+			Messages: append([]chat.Message(nil), messages...),
+			Tools:    l.cfg.Tools.Specs(),
+		})
+		if err != nil {
+			// ctx 取消/超时上抛：快照已持久化，下次同 sessionID 再 Run 即恢复。
+			return res, errors.Wrap(err, "模型调用失败", "session", sessionID)
+		}
+		used.Rounds++
+		res.Rounds = used.Rounds
+
+		// ID 铸造先于入历史：assistant 消息里的 ID 与 pipeline 幂等键同源。
+		calls := make([]chat.ToolCall, len(resp.ToolCalls))
+		copy(calls, resp.ToolCalls)
+		for i := range calls {
+			if calls[i].ID == "" {
+				calls[i].ID = l.newID()
+			}
+		}
+		messages = append(messages, chat.Message{
+			Role:      chat.RoleAssistant,
+			Content:   resp.Content,
+			ToolCalls: calls,
+		})
+		l.emit(ctx, sessionID, EventRoundStart, map[string]any{
+			"round": used.Rounds, "tool_calls": len(calls),
+		})
+
+		if len(calls) == 0 {
+			res.Status = contract.StatusSucceeded
+			res.Final = resp.Content
+			break
+		}
+		if forced {
+			// 收尾轮仍请求工具：额度口径到此为止，不再放行。
+			res.Status = contract.StatusTimedOut
+			break
+		}
+
+		stopped := false
+		for _, call := range calls {
+			if v := roundguard.CheckToolCalls(l.cfg.Budget, used); !v.Allowed {
+				res.Status = contract.StatusTimedOut
+				stopped = true
+				break
+			}
+			if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
+				res.Status = contract.StatusTimedOut
+				stopped = true
+				break
+			}
+			out := l.cfg.Tools.Execute(ctx, sessionID, call)
+			used.ToolCalls++
+			used.Tools[call.Name]++
+			res.ToolCalls = used.ToolCalls
+			messages = append(messages, chat.Message{
+				Role:       chat.RoleTool,
+				Content:    out.Content,
+				ToolCallID: call.ID,
+			})
+			done = append(done, call.ID)
+			l.emit(ctx, sessionID, EventToolCall, map[string]any{
+				"call_id": call.ID, "tool": call.Name, "outcome": string(out.Kind),
+			})
+			if out.Kind == pipeline.KindUncertain {
+				res.Uncertain = append(res.Uncertain, call.ID)
+			}
+			// 回填与提交在同一段顺序代码里：崩溃窗口的两端各自自洽。
+			if err := l.commit(ctx, sessionID, messages, done, contract.StatusRunning); err != nil {
+				return res, err
+			}
+		}
+		if stopped {
+			break
+		}
+	}
+
+	if err := l.commit(ctx, sessionID, messages, done, res.Status); err != nil {
+		return res, err
+	}
+	l.emit(ctx, sessionID, EventSessionState, map[string]any{"status": res.Status})
+	return res, nil
+}
+
+// loadHistory 读恢复点：历史 + 已完成工具调用。首次运行（ErrNotFound）
+// 返回初始历史（仅系统提示）。
+func (l *Loop) loadHistory(ctx context.Context, sessionID string) ([]chat.Message, []string, error) {
+	snap, err := l.cfg.Store.Load(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, checkpoint.ErrNotFound) {
+			msgs := []chat.Message{}
+			if l.cfg.System != "" {
+				msgs = append(msgs, chat.Message{Role: chat.RoleSystem, Content: l.cfg.System})
+			}
+			return msgs, nil, nil
+		}
+		return nil, nil, errors.Wrap(err, "读取会话快照失败", "session", sessionID)
+	}
+	if err := verifyHistory(snap.Fields[fieldHistory]); err != nil {
+		return nil, nil, errors.Wrap(err, "会话快照历史不完整", "session", sessionID)
+	}
+	var messages []chat.Message
+	if raw := snap.Fields[fieldHistory]; raw != "" {
+		if err := json.Unmarshal([]byte(raw), &messages); err != nil {
+			return nil, nil, errors.Wrap(err, "会话快照历史反序列化失败", "session", sessionID)
+		}
+	}
+	// 序号游标回灌：本次提交的序号必须从已持久化的最大值续起。
+	l.seq = snap.Seq
+	return messages, append([]string(nil), snap.Done...), nil
+}
+
+// commit 落一次进度快照（序号严格递增），历史整体序列化进 Fields。
+// 序号由调用侧单调游标管理（SeqGate 只判不分配），恢复时经 loadHistory
+// 回灌——不回灌则本次 Seq=1 会被「已持久化序号 >= 本次」拒收。
+func (l *Loop) commit(ctx context.Context, sessionID string, messages []chat.Message, done []string, status string) error {
+	raw, err := json.Marshal(messages)
+	if err != nil {
+		return errors.Wrap(err, "会话历史序列化失败", "session", sessionID)
+	}
+	l.seq++
+	snap := checkpoint.Snapshot{
+		RunID:  sessionID,
+		Seq:    l.seq,
+		Status: status,
+		Done:   append([]string(nil), done...),
+		Fields: map[string]string{fieldHistory: string(raw)},
+	}
+	if err := l.committer.Commit(ctx, snap); err != nil {
+		return errors.Wrap(err, "进度快照落库失败", "session", sessionID)
+	}
+	return nil
+}
+
+// verifyHistory 历史完整性校验：assistant 的每个工具调用必须都有对应的
+// tool 结果回填。不满足 = 存储里的历史不完整（崩溃窗口不会产出这种形态，
+// 出现即外部篡改/实现漂移），fail-closed。
+func verifyHistory(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	var messages []chat.Message
+	if err := json.Unmarshal([]byte(raw), &messages); err != nil {
+		return err
+	}
+	answered := map[string]bool{}
+	for _, m := range messages {
+		if m.Role == chat.RoleTool {
+			answered[m.ToolCallID] = true
+		}
+	}
+	for _, m := range messages {
+		if m.Role != chat.RoleAssistant {
+			continue
+		}
+		for _, c := range m.ToolCalls {
+			if !answered[c.ID] {
+				return errors.Newf("assistant 的工具调用缺少结果回填: call_id=%s tool=%s", c.ID, c.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// newID 铸造工具调用 ID。默认 crypto/rand；极端失败回退计数器+纳秒时间。
+func (l *Loop) newID() string {
+	if l.cfg.NewID != nil {
+		return l.cfg.NewID()
+	}
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return "call-" + hex.EncodeToString(b[:])
+	}
+	return "call-" + time.Now().Format("20060102150405.000000000") + "-" +
+		hex.EncodeToString([]byte{byte(l.fallback.Add(1))})
+}
+
+// emit 出事件；无发射面时静默跳过（不出事件是合法配置，不是错误）。
+func (l *Loop) emit(ctx context.Context, sessionID, typ string, payload map[string]any) {
+	if l.cfg.Emitter == nil {
+		return
+	}
+	_ = l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload)
+}
+
+// busEmitter 把 eventbus.Broadcast 包成 Emitter（embedded 形态默认）。
+type busEmitter struct{ bus *eventbus.Bus }
+
+func (e busEmitter) Publish(_ context.Context, sessionID, caseID string, stepID *uint64, typ, level string, payload map[string]any) error {
+	e.bus.Broadcast(eventbus.Event{
+		SessionID: sessionID, CaseID: caseID, StepID: stepID,
+		Type: typ, Level: level, Payload: payload, OccurredAt: time.Now(),
+	})
+	return nil
+}

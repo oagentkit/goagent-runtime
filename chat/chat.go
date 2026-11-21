@@ -1,0 +1,73 @@
+// Package chat —— AgentLoop 与模型之间的**供应商中立窄接口**。
+//
+// # 为什么本包存在（装配层的接缝设计）
+//
+// goagent-kernel 的纪律是「内核不调 LLM」；装配层必须把模型接进来，但
+// 接成什么形状决定 runtime 的可测试性与供应商中立性：
+//
+//  1. **窄接口**：Model 只有一个 Chat 方法。任何供应商（eino / OpenAI SDK /
+//     自研网关）包一层适配即可接入，runtime 不 import 任何具体 SDK。
+//  2. **纯数据结构**：Message/ToolCall 是普通结构体，序列化进 checkpoint
+//     快照后恢复，不携带任何供应商特有句柄。
+//  3. **工具调用 ID 由 loop 铸造**（见 agentloop 的 NewID 注入点）：
+//     ID 是幂等键的原材料，必须由编排侧生成并在恢复后保持一致，
+//     不能让模型供应商自由发挥。
+package chat
+
+import "context"
+
+// 消息角色词表（与主流 chat API 同形；本包不解释语义，只做传输）。
+const (
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+	RoleTool      = "tool"
+)
+
+// ToolCall 模型请求的一次工具调用。
+type ToolCall struct {
+	// ID 本次调用的标识——**编排侧铸造**（不是模型编的），
+	// 它同时是副作用幂等键的原材料：恢复重放时同一调用必须带同一 ID。
+	ID string
+	// Name 工具名（pipeline 注册表查它）。
+	Name string
+	// Arguments JSON 文本，原样传给工具的 Handler。
+	Arguments string
+}
+
+// Message 一轮对话中的一条消息。
+type Message struct {
+	Role    string
+	Content string
+	// ToolCalls assistant 消息携带的工具调用请求。
+	ToolCalls []ToolCall
+	// ToolCallID tool 消息回填时对应的调用 ID。
+	ToolCallID string
+}
+
+// ToolSpec 暴露给模型的工具面（描述 + 参数模式）。
+type ToolSpec struct {
+	Name        string
+	Description string
+	// Parameters JSON Schema 文本；空串 = 不声明参数模式。
+	Parameters string
+}
+
+// ChatRequest 一次模型调用请求。
+type ChatRequest struct {
+	Messages []Message
+	Tools    []ToolSpec
+}
+
+// ChatResponse 一次模型调用响应。
+type ChatResponse struct {
+	// Content 终答文本（ToolCalls 为空时即最终回答）。
+	Content string
+	// ToolCalls 非空 = 模型请求执行工具，loop 将进入工具回合。
+	ToolCalls []ToolCall
+}
+
+// Model 供应商中立的模型调用接口——runtime 唯一需要的模型面。
+type Model interface {
+	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
+}
