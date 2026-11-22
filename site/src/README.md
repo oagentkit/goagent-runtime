@@ -26,22 +26,7 @@ features:
 
 ## 它处在哪一层
 
-```mermaid
-flowchart TB
-    subgraph L1["① 宿主产品（你写的）"]
-        A["系统提示词 · 工具实现 · 模型供应商适配"]
-    end
-    subgraph L2["② goagent-runtime（本仓）"]
-        B["Loop / Pipeline / 存储 / 事件的接线与默认口径"]
-    end
-    subgraph L3["③ goagent-kernel（判据）"]
-        C["状态机 · 副作用闸 · 回合守卫 · 检查点"]
-    end
-    subgraph L4["④ oagentkit / oekit（上游原语）"]
-        D["工具治理 · 事件广播 · 并发与日志 · 基础库"]
-    end
-    L1 --> L2 --> L3 --> L4
-```
+<ArchDiagram />
 
 一句话：**kernel 只管「怎么判定对错」，runtime 负责「把零件装成一辆车」**。你坐在驾驶座上，不用读几十个包。
 

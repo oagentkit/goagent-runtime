@@ -2,47 +2,7 @@
 
 ## 一张图看全家桶
 
-```mermaid
-flowchart TB
-    subgraph host["宿主产品（你写的）"]
-        H1["系统提示词"]
-        H2["工具 Handler"]
-        H3["模型适配（chat.Model）"]
-        H4["事件 Sink（日志/指标/审计）"]
-    end
-
-    subgraph rt["goagent-runtime（本仓）"]
-        direction TB
-        R0["runtime：模板装配 NewEmbedded / NewStandalone"]
-        R1["agentloop：可恢复回合循环"]
-        R2["pipeline：工具副作用施加管线"]
-        R3["storage / sqliteadapter / pgstore：11 面存储门面"]
-        R4["observe：eventbus → 宿主回调"]
-        R5["chat：供应商中立窄接口"]
-        R0 --> R1
-        R1 <--> R5
-        R1 --> R2
-        R1 --> R3
-        R1 --> R4
-    end
-
-    subgraph kern["goagent-kernel（判据）"]
-        K1["sideeffect：副作用闸（幂等）"]
-        K2["roundguard：预算回合守卫"]
-        K3["eventbus：事件广播判据"]
-        K4["state machine / reconcile / trajectory"]
-    end
-
-    H1 --> R0
-    H2 --> R2
-    H3 --> R5
-    R4 --> H4
-    R2 --> K1
-    R3 --> K1
-    R1 --> K2
-    R4 --> K3
-    R1 --> K3
-```
+<ArchDiagram />
 
 读图要点：
 

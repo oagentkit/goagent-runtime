@@ -24,15 +24,37 @@ async function render(): Promise<void> {
   if (!el.value) return
   const dark = isDark()
   // 主题跟随站点暗/亮模式：暗色用 mermaid 官方 dark 主题，亮色用 neutral（不发黄）。
+  // 自定义 base 主题：节点/连线/字色全部按站点设计语言走，不再用 mermaid 默认配色。
+  const fontFamily = '-apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'
+  const vars = dark ? {
+    primaryColor: '#21262d', primaryTextColor: '#e6edf3', primaryBorderColor: '#58a6ff',
+    lineColor: '#7d8590', textColor: '#e6edf3',
+    secondaryColor: '#16181d', tertiaryColor: '#16181d',
+    clusterBkg: '#1c2128', clusterBorder: '#3d444d', edgeLabelBackground: '#16181d',
+    actorBkg: '#21262d', actorBorder: '#58a6ff', actorTextColor: '#e6edf3',
+    signalColor: '#7d8590', signalTextColor: '#e6edf3',
+    labelBoxBkgColor: '#21262d', labelTextColor: '#e6edf3', loopTextColor: '#9aa7b8',
+    noteBkgColor: '#21262d', noteBorderColor: '#3d444d', noteTextColor: '#e6edf3',
+    activationBorderColor: '#58a6ff', activationBkgColor: '#21262d',
+    sequenceNumberColor: '#58a6ff', mainBkg: '#21262d', nodeBorder: '#58a6ff',
+  } : {
+    primaryColor: '#f6f8fa', primaryTextColor: '#1f2328', primaryBorderColor: '#0969da',
+    lineColor: '#59636e', textColor: '#1f2328',
+    secondaryColor: '#ffffff', tertiaryColor: '#ffffff',
+    clusterBkg: '#f6f8fa', clusterBorder: '#d1d9e0', edgeLabelBackground: '#ffffff',
+    actorBkg: '#f6f8fa', actorBorder: '#0969da', actorTextColor: '#1f2328',
+    signalColor: '#59636e', signalTextColor: '#1f2328',
+    labelBoxBkgColor: '#f6f8fa', labelTextColor: '#1f2328', loopTextColor: '#59636e',
+    noteBkgColor: '#f6f8fa', noteBorderColor: '#d1d9e0', noteTextColor: '#1f2328',
+    activationBorderColor: '#0969da', activationBkgColor: '#f6f8fa',
+    sequenceNumberColor: '#0969da', mainBkg: '#f6f8fa', nodeBorder: '#0969da',
+  }
   mermaid.initialize({
     startOnLoad: false,
-    theme: dark ? 'dark' : 'neutral',
-    themeVariables: {
-      fontFamily: '-apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
-      fontSize: '15px',
-    },
-    flowchart: { htmlLabels: true, curve: 'basis', padding: 12 },
-    sequence: { actorMargin: 56, mirrorActors: false, wrap: true, width: 160 },
+    theme: 'base',
+    themeVariables: { fontFamily, fontSize: '15px', ...vars },
+    flowchart: { htmlLabels: true, curve: 'basis', padding: 12, nodeSpacing: 30, rankSpacing: 42 },
+    sequence: { actorMargin: 60, mirrorActors: false, wrap: true, width: 170, boxMargin: 12, messageMargin: 34 },
   })
   try {
     const id = 'mmd-' + Math.random().toString(36).slice(2, 12)
