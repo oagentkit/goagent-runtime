@@ -1,6 +1,7 @@
 <template>
-  <div class="arch-diagram" role="img" aria-label="goagent-runtime 架构图">
-    <svg viewBox="0 0 980 640" xmlns="http://www.w3.org/2000/svg">
+  <div class="arch-diagram-wrap">
+    <div class="arch-diagram" role="img" aria-label="goagent-runtime 架构图">
+      <svg viewBox="0 0 980 640" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="ad-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" fill="var(--ad-line)" />
@@ -117,7 +118,9 @@
         <path d="M830 412 C800 452, 570 458, 548 486" />
         <path d="M624 510 L654 510" />
       </g>
-    </svg>
+      </svg>
+    </div>
+    <p class="arch-scroll-hint">左右滑动，查看完整架构图 →</p>
   </div>
 </template>
 
@@ -142,7 +145,8 @@ html[data-theme='light'] .arch-diagram {
   padding: 18px 14px;
   border-radius: 12px;
   overflow-x: auto;
-  text-align: center;
+  /* 不用 text-align: center —— 溢出时居中会让左侧内容永远滚不到（经典居中溢出陷阱） */
+  overscroll-behavior-x: contain;
   background: var(--ad-card);
   border: 1px solid var(--ad-card-border);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
@@ -151,9 +155,28 @@ html[data-theme='light'] .arch-diagram {
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
 }
 .arch-diagram svg {
+  display: block;
+  /* 放得下时居中；放不下（min-width 生效）时 margin auto 归零 ⇒ 左对齐、两端可滚 */
+  margin: 0 auto;
   max-width: 100%;
   height: auto;
   min-width: 720px;
+}
+.arch-scroll-hint {
+  display: none;
+}
+/* 手机断点：内容列最宽 671px < 900px ⇒ 必然可滑，提示不会说谎 */
+@media (max-width: 719px) {
+  .arch-diagram svg {
+    min-width: 900px;
+  }
+  .arch-scroll-hint {
+    display: block;
+    margin: -8px 0 0;
+    font-size: 12.5px;
+    text-align: center;
+    color: var(--vp-c-text-mute);
+  }
 }
 .arch-diagram .band {
   fill-opacity: 0.055;
