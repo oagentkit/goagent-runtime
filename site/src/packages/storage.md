@@ -51,7 +51,7 @@ flowchart LR
     U["上层代码"] -->|同一段代码| F["storage 门面"]
     F -->|embedded 模板| MEM["内存"]
     F -->|standalone 模板| SQ["SQLite"]
-    F -->|未来 cluster| PG["PG"]
+    F -->|cluster 模板| PG["PG"]
 ```
 
 换模板不改业务代码——模板切换是存储面的配置，不是上层的改动。

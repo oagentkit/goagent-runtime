@@ -22,6 +22,8 @@ features:
     details: chat.Model 只有一个 Chat 方法，任何模型 SDK 包一层适配即可接入，本仓不 import 任何具体供应商。
   - title: 判据不另写一套
     details: 存储判据全部来自 kernel 契约：内存 / SQLite / PG 三个实现都跑同一套共享测试（33 个子测试）。
+  - title: 多副本 cluster
+    details: 多个副本共享一个 PostgreSQL：同一会话集群内只有一个副本执行，副本崩溃后别的副本接管重跑，已施加的副作用不会第二次施加。
 ---
 
 ## 它处在哪一层
@@ -36,4 +38,6 @@ features:
 |---|---|---|
 | `NewEmbedded` | 内存 | 单进程、测试、内嵌 |
 | `NewStandalone` | SQLite 单文件（WAL） | 本机服务，进程重启可恢复 |
-| cluster | — | 尚未提供（PG + worker 池，等 kernel 侧压测验证后上） |
+| `cluster` | PostgreSQL（多副本共享） | 多副本 / 高可用 worker 池 |
+
+cluster 的能力、前提与证据见 [模板选型](/templates/)。

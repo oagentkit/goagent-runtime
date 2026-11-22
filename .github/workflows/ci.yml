@@ -51,3 +51,9 @@ jobs:
           GAK_PGREF_DSN: postgres://postgres:postgres@localhost:5432/gakref?sslmode=disable
         run: |
           CGO_ENABLED=0 go test ./pgstore/ -count=1 -timeout 15m -v
+
+      - name: cluster 高可用集成（真 PG：双副本抢占 / 崩溃接管不重复施加）
+        env:
+          GAK_PGREF_DSN: postgres://postgres:postgres@localhost:5432/gakref?sslmode=disable
+        run: |
+          CGO_ENABLED=0 go test ./cluster/ -count=1 -timeout 15m -v

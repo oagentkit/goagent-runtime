@@ -16,9 +16,11 @@
 //
 //   - NewEmbedded：内存存储，单进程，零外部依赖（测试/内嵌场景）；
 //   - NewStandalone：SQLite 单文件持久化（本机服务场景）；
-//   - cluster（PG + worker 池）：**尚未提供**——等 kernel 侧控制面原子审计
-//     与租约失格两项 P0 修复、PG 事件面压测过后再上（把未验证的机制固化成
-//     默认路径，比没有模板更糟）。
+//   - cluster（PG + worker 池，另见本仓 cluster 包）：多副本形态——多个副本
+//     共享同一个 PG；同一会话集群内有且只有一个副本执行（认领 + 租约 +
+//     接管代次，走 kernel taskboard 判据）；副本崩了别的副本接管重跑，已
+//     施加的副作用不重复施加（前提是宿主声明业务幂等键，见
+//     pipeline.Tool.IdempotencyKey）。
 package runtime
 
 import (

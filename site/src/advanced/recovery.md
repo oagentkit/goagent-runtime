@@ -66,5 +66,5 @@ runtime 的选择永远是后者：**不猜、不盲目重试**。这类结果�
 | PG SIGKILL e2e（integration CI，真 PG） | 提交中途被 SIGKILL，重启恢复且不重放 |
 
 ::: warning 边界
-这套语义保证「**单个会话**的确定性」。跨会话的全局约束（多 worker 抢同一任务）属于 cluster 领域，模板未出之前别拿 standalone 硬扛——SQLite 的锁不是干这个的。
+这套语义保证「**单个会话**的确定性」。跨会话的全局约束（多 worker 抢同一任务）由 cluster 模板承担（PG + 认领/租约/接管代次）；要跨副本就别拿 standalone 硬扛——SQLite 的锁不是干这个的。
 :::

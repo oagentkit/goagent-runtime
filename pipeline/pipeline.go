@@ -59,6 +59,21 @@ type Tool struct {
 	// 重试不会重复施加副作用）。未声明（false）= 按最弱处理：施加失败即
 	// 结果未知，必须先对账。
 	Safe bool
+	// IdempotencyKey 业务幂等键（**可选**）：宿主按业务语义给出「同一次
+	// 业务动作」的稳定键（订单号、消息 ID、批次号……）。
+	//
+	// 为什么需要它：默认幂等键是编排侧铸造的 toolCallID——它在**一次
+	// Run 内**稳定，但模型重放同一请求时通常生成**新的** ID（供应商不
+	// 保证 tool_call_id 跨生成稳定）⇒ 闸认不出这是同一次动作，会再施加
+	// 一次。集群形态里「副本崩溃 → 别的副本接管重跑」正是这个场景。
+	//
+	// 声明了它 ⇒ 同一业务动作无论由哪个副本、哪一次 Run 施加，键都相同
+	// ⇒ 闸判 replayed ⇒ 副作用不会被第二次施加（**结构性**保证，不再
+	// 依赖模型恰好复述同一个 ID）。不声明 ⇒ 沿用 toolCallID（单进程内
+	// 的重复调用仍受保护，跨副本接管则依赖模型提供稳定 ID）。
+	//
+	// 返回空串 = 装配期用法错误 ⇒ 该次调用判失败（空键会让不同动作撞键）。
+	IdempotencyKey func(ctx context.Context, args []byte) (string, error)
 	// Handler 执行体（nil = 装配期编程错误，注册即报错）。
 	Handler Handler
 }
@@ -119,8 +134,19 @@ func (p *Pipeline) Execute(ctx context.Context, sessionID string, call chat.Tool
 	if t.Safe {
 		safety = sideeffect.RetrySafetySafe
 	}
+	key := call.ID
+	if t.IdempotencyKey != nil {
+		k, kerr := t.IdempotencyKey(ctx, []byte(call.Arguments))
+		if kerr != nil {
+			return Outcome{Kind: KindFailed, Content: "业务幂等键生成失败：" + kerr.Error()}
+		}
+		if k == "" {
+			return Outcome{Kind: KindFailed, Content: "业务幂等键为空（空键会让不同动作撞键）"}
+		}
+		key = k
+	}
 	act := sideeffect.Action{
-		Key:         sideeffect.Key(call.ID),
+		Key:         sideeffect.Key(key),
 		Resource:    sessionID + "/" + call.Name,
 		Payload:     []byte(call.Arguments),
 		RetrySafety: safety,

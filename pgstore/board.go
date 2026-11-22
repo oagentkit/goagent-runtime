@@ -31,6 +31,78 @@ import (
 	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
+// Submit 投递一条待认领任务（**宿主投递面**，不是 kernel 判据面）。
+//
+// kernel 的 taskboard.Board 契约只有「认领 / 释放 / 完成 / 续期」——投递
+// 语义归宿主（不同宿主的投递规则不同：延迟、去重、优先级、扇入）。
+// 本方法是 PG 参考实现给出的最小投递面：立即可领的 open 任务。
+//
+// 语义（每种形态都有明确落点，不静默吞）：
+//
+//   - 新 id            ⇒ 插入 open 任务；
+//   - 同 id 且已终态   ⇒ 重新打开（新一轮提问：会话历史由 checkpoint
+//     （done/failed）      累积，任务本身只是「待执行的一次」；重开时清
+//                        租约但**不重置 fence**——接管代次必须单调，
+//                        否则下游栅栏会被旧代次穿透）；
+//   - 同 id 且进行中   ⇒ taskboard.ErrTaken（覆盖会让在途执行体的令牌
+//     （claimed）        失效，且可能双执行——宁可拒绝也不覆盖）；
+//   - 同 id 且已排队   ⇒ 幂等无操作（重复投递不报错；内容也不改：改动
+//     （open）            会与已排队的那次提问不一致）。
+func (b *BoardStore) Submit(ctx context.Context, t taskboard.Task) error {
+	if t.ID == "" {
+		return errors.New("pgstore: 投递任务缺 ID（空 ID = 无处安放）")
+	}
+	state := t.State
+	if state == "" {
+		state = taskboard.StateOpen
+	}
+	if state != taskboard.StateOpen {
+		return errors.New("pgstore: 投递面只接受 open 状态的任务（其余状态是认领面在用）")
+	}
+	err := runTx(ctx, b.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`INSERT INTO pgref_board_task (id, title, deps, state, seq)
+			 VALUES ($1, $2, $3, 'open', 1)
+			 ON CONFLICT (id) DO UPDATE SET
+			     title = EXCLUDED.title,
+			     deps = EXCLUDED.deps,
+			     state = 'open',
+			     owner = NULL, token = NULL, until = NULL,
+			     seq = pgref_board_task.seq + 1
+			 WHERE pgref_board_task.state IN ('done', 'failed')`,
+			string(t.ID), t.Title, depIDs(t.Deps))
+		if err != nil {
+			return errors.Wrap(err, "pgstore: 投递任务失败", "task", string(t.ID))
+		}
+		if tag.RowsAffected() > 0 {
+			return nil
+		}
+		// 冲突且未重开 ⇒ 看现有状态，给出明确结论（不静默成功）。
+		var cur string
+		if err := tx.QueryRow(ctx,
+			`SELECT state FROM pgref_board_task WHERE id = $1`, string(t.ID)).Scan(&cur); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return errors.Wrap(err, "pgstore: 投递后任务行消失", "task", string(t.ID))
+			}
+			return errors.Wrap(err, "pgstore: 读任务状态失败", "task", string(t.ID))
+		}
+		switch taskboard.State(cur) {
+		case taskboard.StateClaimed:
+			return taskboard.ErrTaken
+		case taskboard.StateOpen:
+			return nil // 已在队列：幂等
+		case taskboard.StateDone, taskboard.StateFailed:
+			return taskboard.ErrTerminal
+		default:
+			return taskboard.ErrUnknownState
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BoardStore taskboard.Board（含 RenewingBoard）的 PostgreSQL 参考实现。
 type BoardStore struct {
 	pool *pgxpool.Pool
