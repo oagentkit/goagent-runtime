@@ -57,3 +57,17 @@ jobs:
           GAK_PGREF_DSN: postgres://postgres:postgres@localhost:5432/gakref?sslmode=disable
         run: |
           CGO_ENABLED=0 go test ./cluster/ -count=1 -timeout 15m -v
+
+  site-links:
+    name: 站点内部链接门禁（正文链接自带 base + 目标页面存在）
+    # 子路径部署（base=/goagent-runtime/）下，markdown 正文链接是原生 <a href>，
+    # 框架不加工 base ⇒ 写成 '/guide/x.html' 会被解析到站点根之外 ⇒ 404。
+    # 判据本体在 site/scripts/check-links.mjs（失败形态是变红），build 前置同一份。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 内部链接检查（子路径部署下的 404 防线）
+        run: node site/scripts/check-links.mjs

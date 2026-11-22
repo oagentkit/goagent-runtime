@@ -40,4 +40,4 @@ features:
 | `NewStandalone` | SQLite 单文件（WAL） | 本机服务，进程重启可恢复 |
 | `cluster` | PostgreSQL（多副本共享） | 多副本 / 高可用 worker 池 |
 
-cluster 的能力、前提与证据见 [模板选型](/templates/)。
+cluster 的能力、前提与证据见 [模板选型](/goagent-runtime/templates/)。

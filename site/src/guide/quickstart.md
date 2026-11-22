@@ -58,5 +58,5 @@ type Model interface {
 
 ## 遇到问题？
 
-- 工具被 `Refused`：模型请求了一个**没注册**的工具——这是 fail-closed 设计，注册上就好（见 [pipeline](/packages/pipeline.html)）。
-- 结果带 `Uncertain`：远端副作用是否生效无法确认，**禁止盲目重试**（见 [中断恢复](/advanced/recovery.html)）。
+- 工具被 `Refused`：模型请求了一个**没注册**的工具——这是 fail-closed 设计，注册上就好（见 [pipeline](/goagent-runtime/packages/pipeline.html)）。
+- 结果带 `Uncertain`：远端副作用是否生效无法确认，**禁止盲目重试**（见 [中断恢复](/goagent-runtime/advanced/recovery.html)）。

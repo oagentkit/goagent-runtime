@@ -44,7 +44,7 @@ func (m *myModel) Chat(ctx context.Context, msgs []chat.Message, tools []chat.To
 }
 ```
 
-约束只有一条：**不要自己生成 toolCallID**——入历史前 loop 会铸造（见 [agentloop](/packages/agentloop.html)）。
+约束只有一条：**不要自己生成 toolCallID**——入历史前 loop 会铸造（见 [agentloop](/goagent-runtime/packages/agentloop.html)）。
 
 ## 依赖
 

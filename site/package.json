@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vuepress dev src",
-    "build": "vuepress build src",
+    "check:links": "node scripts/check-links.mjs",
+    "build": "npm run check:links && vuepress build src",
     "build:debug": "vuepress build src --debug"
   },
   "devDependencies": {

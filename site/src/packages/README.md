@@ -31,13 +31,13 @@ flowchart LR
 
 | 包 | 一句话职责 | 详细 |
 |---|---|---|
-| `chat` | 供应商中立的模型窄接口与消息类型 | [展开](/packages/chat.html) |
-| `pipeline` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | [展开](/packages/pipeline.html) |
-| `agentloop` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | [展开](/packages/agentloop.html) |
-| `storage` | 存储装配面（内存判据 + SQLite/PG 门面转发） | [展开](/packages/storage.html) |
-| `sqliteadapter` / `pgstore` | 两个参考实现，11 面统一门面，判据套件同源 | [展开](/packages/sqlite-pg.html) |
-| `runtime` | 模板装配（embedded / standalone） | [展开](/packages/runtime.html) |
-| `observe` | eventbus → 宿主回调 | [展开](/packages/observe.html) |
+| `chat` | 供应商中立的模型窄接口与消息类型 | [展开](/goagent-runtime/packages/chat.html) |
+| `pipeline` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | [展开](/goagent-runtime/packages/pipeline.html) |
+| `agentloop` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | [展开](/goagent-runtime/packages/agentloop.html) |
+| `storage` | 存储装配面（内存判据 + SQLite/PG 门面转发） | [展开](/goagent-runtime/packages/storage.html) |
+| `sqliteadapter` / `pgstore` | 两个参考实现，11 面统一门面，判据套件同源 | [展开](/goagent-runtime/packages/sqlite-pg.html) |
+| `runtime` | 模板装配（embedded / standalone） | [展开](/goagent-runtime/packages/runtime.html) |
+| `observe` | eventbus → 宿主回调 | [展开](/goagent-runtime/packages/observe.html) |
 
 ## 依赖速查
 

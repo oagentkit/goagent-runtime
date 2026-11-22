@@ -36,6 +36,6 @@ cluster 的前置是 kernel 两项 P0 已修复并发布（控制面权威介入
 
 ## 接下来
 
-- [五分钟跑起来](/guide/quickstart.html)——两条命令看到「中断恢复、副作用不重放」
-- [架构总览](/guide/architecture.html)——一次请求在层与层之间怎么走
-- [核心概念](/guide/concepts.html)——幂等键、检查点、预算……逐个讲透
+- [五分钟跑起来](/goagent-runtime/guide/quickstart.html)——两条命令看到「中断恢复、副作用不重放」
+- [架构总览](/goagent-runtime/guide/architecture.html)——一次请求在层与层之间怎么走
+- [核心概念](/goagent-runtime/guide/concepts.html)——幂等键、检查点、预算……逐个讲透

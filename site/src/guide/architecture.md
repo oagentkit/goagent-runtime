@@ -41,7 +41,7 @@ sequenceDiagram
     LP-->>U: Result{Status, Final, ...}
 ```
 
-中间任何一步进程死掉，恢复时从 **checkpoint** 继续；已提交过的工具调用在副作用闸前被判 `replayed`，**Handler 不会第二次执行**（详见 [中断恢复](/advanced/recovery.html)）。
+中间任何一步进程死掉，恢复时从 **checkpoint** 继续；已提交过的工具调用在副作用闸前被判 `replayed`，**Handler 不会第二次执行**（详见 [中断恢复](/goagent-runtime/advanced/recovery.html)）。
 
 ## 依赖关系（谁 import 谁）
 
