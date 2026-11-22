@@ -29,3 +29,10 @@
   本仓实录的两次踩坑）。
 - `go test ./... -count=1` 提交前必须全绿；PG 判据用例（`pgstore/`）在无 `GAK_PGREF_DSN` 时显式 skip，不伪造结果。
 - `pgstore/` 与 `sqliteadapter/` 是 kernel 迁移来的参考实现：对 kernel 的 import 只允许契约面（checkpoint/controlplane/eventbus/sideeffect/sidetest/taskboard/tenant），判据本体归 kernel，本仓不另写。
+- 站点部署在**子路径**（base=`/goagent-runtime/`）：**正文 markdown 链接必须自带 base 前缀**。
+  markdown 链接被 markdown-it 输出成原生 `<a href>`，框架不加工它 ⇒ 写成 `/guide/x.html`
+  会被浏览器解析到站点根之外 ⇒ **404**（实录 2026-11-23：首页「接下来」三条链接全 404）。
+  导航/侧栏/hero 按钮走的是**路由链接**（框架运行时加 base），写法相反：必须是纯路由路径，
+  以 `/` 开头且**不含** base。判据：`site/scripts/check-links.mjs`（正文链接自带 base + 目标
+  页面存在；路由链接为纯路由路径；base 解析不到即判红）——已前置到 `site` 的 build（Pages
+  因此不可能再发出 404 链接），并在 ci.yml 有 `site-links` 作业。
