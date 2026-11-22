@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>goagent-runtime — Go Agent 运行时装配层</title>
+<meta name="description" content="goagent-runtime：把 goagent-kernel 的确定性机制装配成业务方可直接使用的 Agent 运行时。可恢复回合循环、副作用幂等、预算守卫、SQLite/PG 持久化。">
+<style>
+:root {
+  --bg: #0b0e14;
+  --bg-soft: #11151f;
+  --panel: #151a26;
+  --line: #232b3d;
+  --text: #e6eaf2;
+  --text-dim: #9aa5ba;
+  --accent: #5b9dff;
+  --accent-2: #7ee0a3;
+  --warn: #f0b45a;
+  --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.7;
+}
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+/* ── 导航 ── */
+nav {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(11,14,20,.85); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+nav .wrap { display: flex; align-items: center; height: 56px; gap: 24px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--text); text-decoration: none; }
+.logo b { color: var(--accent); }
+nav .links { margin-left: auto; display: flex; gap: 20px; }
+nav .links a { color: var(--text-dim); text-decoration: none; font-size: 13.5px; }
+nav .links a:hover { color: var(--text); }
+.badge {
+  font-family: var(--mono); font-size: 12px; color: var(--accent-2);
+  border: 1px solid rgba(126,224,163,.35); border-radius: 999px; padding: 2px 10px;
+}
+
+/* ── Hero ── */
+.hero { padding: 88px 0 64px; position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(700px 320px at 20% 0%, rgba(91,157,255,.14), transparent 65%),
+    radial-gradient(600px 300px at 85% 20%, rgba(126,224,163,.09), transparent 65%);
+  pointer-events: none;
+}
+.hero .wrap { position: relative; }
+.kicker {
+  font-family: var(--mono); font-size: 13px; color: var(--accent);
+  letter-spacing: .08em; margin-bottom: 18px;
+}
+.hero h1 { font-size: 42px; line-height: 1.25; letter-spacing: -.01em; max-width: 760px; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero p.lede { margin-top: 20px; font-size: 17px; color: var(--text-dim); max-width: 720px; }
+.hero .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
+.btn {
+  display: inline-block; padding: 11px 22px; border-radius: 8px; font-size: 14.5px;
+  text-decoration: none; font-weight: 600;
+}
+.btn.primary { background: var(--accent); color: #08111f; }
+.btn.ghost { border: 1px solid var(--line); color: var(--text); }
+.btn:hover { filter: brightness(1.1); }
+.stats { margin-top: 52px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.stat {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
+}
+.stat .n { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--accent-2); }
+.stat .d { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+/* ── 章节 ── */
+section { padding: 64px 0; border-top: 1px solid var(--line); }
+section:first-of-type { border-top: none; }
+h2 { font-size: 28px; letter-spacing: -.01em; margin-bottom: 8px; }
+.sub { color: var(--text-dim); font-size: 15px; max-width: 760px; margin-bottom: 36px; }
+
+/* ── 分层架构 ── */
+.layers { display: flex; flex-direction: column; gap: 10px; }
+.layer {
+  display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 22px;
+}
+.layer .who { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+.layer .what { color: var(--text-dim); font-size: 14px; }
+.layer.rt { border-color: rgba(91,157,255,.5); background: linear-gradient(90deg, rgba(91,157,255,.08), var(--panel)); }
+.layer.rt .who { color: var(--accent); }
+
+/* ── 模板卡 ── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px;
+  display: flex; flex-direction: column;
+}
+.card h3 { font-size: 17px; font-family: var(--mono); margin-bottom: 6px; }
+.card h3 .tag { font-size: 11px; vertical-align: middle; margin-left: 8px; padding: 2px 8px; border-radius: 4px; }
+.tag.ok { background: rgba(126,224,163,.15); color: var(--accent-2); }
+.tag.next { background: rgba(240,180,90,.15); color: var(--warn); }
+.card p { color: var(--text-dim); font-size: 14px; flex: 1; }
+.card code.give {
+  display: block; margin-top: 14px; padding: 12px 14px; border-radius: 8px;
+  background: var(--bg-soft); border: 1px solid var(--line);
+  font-family: var(--mono); font-size: 12.5px; color: var(--accent-2); line-height: 1.8;
+}
+
+/* ── 代码块 ── */
+pre {
+  background: #0d1320; border: 1px solid var(--line); border-radius: 10px;
+  padding: 20px 22px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.75;
+}
+code .k { color: #c792ea; } code .s { color: #a5d6a7; } code .c { color: #5c6b85; }
+code .f { color: #82aaff; } code .t { color: #ffcb6b; }
+
+/* ── 恢复语义流程 ── */
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.step {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
+  position: relative;
+}
+.step .idx {
+  font-family: var(--mono); font-size: 12px; color: var(--accent); margin-bottom: 8px;
+}
+.step h4 { font-size: 15px; margin-bottom: 6px; }
+.step p { font-size: 13.5px; color: var(--text-dim); }
+ul.checks { list-style: none; margin-top: 6px; }
+ul.checks li { padding: 9px 0 9px 30px; position: relative; border-bottom: 1px dashed var(--line); font-size: 14.5px; color: var(--text-dim); }
+ul.checks li:last-child { border-bottom: none; }
+ul.checks li::before {
+  content: "✓"; position: absolute; left: 4px; color: var(--accent-2); font-weight: 700;
+}
+ul.checks li b { color: var(--text); font-weight: 600; }
+
+/* ── 判据表 ── */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--text-dim); font-weight: 600; font-size: 13px; letter-spacing: .04em; }
+td:first-child { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
+
+.note {
+  margin-top: 26px; padding: 16px 20px; border-radius: 10px; font-size: 14px;
+  background: rgba(240,180,90,.08); border: 1px solid rgba(240,180,90,.3); color: #e8cf9f;
+}
+.note b { color: var(--warn); }
+
+footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--text-dim); font-size: 13.5px; }
+footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+footer a { color: var(--text-dim); }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 720px) {
+  .hero h1 { font-size: 30px; }
+  .layer { grid-template-columns: 1fr; gap: 6px; }
+  nav .links { display: none; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#">goagent-<b>runtime</b></a>
+    <span class="badge">v0.3.0</span>
+    <div class="links">
+      <a href="#arch">架构</a>
+      <a href="#templates">模板</a>
+      <a href="#quickstart">快速开始</a>
+      <a href="#resume">恢复语义</a>
+      <a href="#evidence">判据证据</a>
+      <a href="https://github.com/yi-nology/goagent-runtime">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">AGENT RUNTIME · BUILT ON goagent-kernel</div>
+    <h1>把分布式正确性机制，<br>装配成<em>普通 Go 团队</em>能直接用的 Agent 运行时</h1>
+    <p class="lede">
+      goagent-runtime 是 <a href="https://github.com/yi-nology/goagent-kernel" style="color:var(--accent)">goagent-kernel</a>
+      的装配层：内核负责「失败后到底允许做什么」的确定性判据，本层负责把它们接成
+      「模型 ↔ 工具 ↔ 存储」的完整回路。进程崩溃后接着跑而不是重做——这不是口号，是每条判据都有测试钉着的契约。
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/yi-nology/goagent-runtime">GitHub 仓库</a>
+      <a class="btn ghost" href="#quickstart">五分钟接入</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">33</div><div class="d">kernel sidetest 契约子测试，内存 / SQLite / PostgreSQL 三个存储实现同跑一段判据</div></div>
+      <div class="stat"><div class="n">1</div><div class="d">恢复重放时工具执行体的调用次数——中断恢复不重复施加副作用</div></div>
+      <div class="stat"><div class="n">0</div><div class="d">对具体 LLM SDK 的依赖——chat.Model 是唯一的模型接缝</div></div>
+      <div class="stat"><div class="n">11</div><div class="d">存储门面统一面数（任务板 / 副作用闸 / 快照 / 事件 / 租户……），SQLite 与 PG 逐字同款</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="arch">
+  <div class="wrap">
+    <h2>四层各归其位</h2>
+    <p class="sub">边界纪律是本项目的骨架：每一层只认识自己那一半，判据单源、依赖单向。</p>
+    <div class="layers">
+      <div class="layer"><div class="who">宿主产品</div><div class="what">只写领域：系统提示、工具实现、模型供应商适配。不读内核几十个包。</div></div>
+      <div class="layer rt"><div class="who">goagent-runtime</div><div class="what">本层：回合循环、工具施加管线、存储装配、事件观测的接线与默认口径；SQLite / PG 参考实现与编排演示住在这里。</div></div>
+      <div class="layer"><div class="who">goagent-kernel</div><div class="what">判据本体：副作用闸、检查点、回合守卫、任务板、租约会话、控制面——零数据库驱动的纯契约仓。</div></div>
+      <div class="layer"><div class="who">oagentkit / oekit</div><div class="what">上游原语：沙箱档位、并发安全、结构化错误。</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="templates">
+  <div class="wrap">
+    <h2>三种部署形态</h2>
+    <p class="sub">用户给出的只有领域输入；存储、事件、判据装配全是模板的事。</p>
+    <div class="cards">
+      <div class="card">
+        <h3>NewEmbedded<span class="tag ok">可用</span></h3>
+        <p>内存存储、零外部依赖。单进程、测试、内嵌场景。判据与持久化形态同构，日后升级 standalone 只换一行。</p>
+        <code class="give">用户提供：模型客户端 + 工具列表</code>
+      </div>
+      <div class="card">
+        <h3>NewStandalone<span class="tag ok">可用</span></h3>
+        <p>SQLite（WAL 单文件）持久化。进程重启后同一 sessionID 从快照恢复，历史一字不丢。</p>
+        <code class="give">用户提供：模型客户端 + 工具列表 + SQLite 路径</code>
+      </div>
+      <div class="card">
+        <h3>cluster<span class="tag next">下一步</span></h3>
+        <p>PostgreSQL + worker 池的多副本形态。前置已清：kernel 两项 P0（权威介入原子审计、租约持续故障失格）已在 v0.64.1 / v0.64.3 修复；PG 存储与 worker 契约已在本仓就位。</p>
+        <code class="give">将提供：模型客户端 + 工具列表 + PG DSN + worker 配置</code>
+      </div>
+    </div>
+    <div class="note">
+      <b>定位边界（如实声明）：</b>本仓提供装配层与参考实现，不保证所有机制已组成可直接部署的高可用 Runtime；
+      实际能力以各模板的集成测试证据为准。cluster 模板在真实多副本故障注入验证通过前不发布——把未验证的机制固化成默认路径，比没有模板更糟。
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <h2>五分钟接入</h2>
+    <p class="sub">任何模型 SDK 包一层 chat.Model 适配即可接入；本仓不 import 任何具体供应商。</p>
+<pre><code><span class="c">// go get github.com/yi-nology/goagent-runtime@latest</span>
+
+rt, err := runtime.<span class="f">NewStandalone</span>(runtime.Config{
+    Model: myModel, <span class="c">// 实现 chat.Model：一个 Chat 方法</span>
+    Tools: []pipeline.Tool{{
+        Name: <span class="s">"查库存"</span>,
+        Handler: <span class="k">func</span>(ctx context.Context, args []<span class="k">byte</span>) (<span class="k">string</span>, <span class="k">error</span>) {
+            <span class="c">// …你的领域逻辑…</span>
+        },
+    }},
+}, <span class="s">"/var/lib/myagent/agent.db"</span>)
+
+res, err := rt.<span class="f">Run</span>(ctx, <span class="s">"session-1"</span>, <span class="s">"帮我查一下 A 仓库存"</span>)
+<span class="c">// res.Status / res.Final / res.Rounds / res.ToolCalls / res.Uncertain</span></code></pre>
+  </div>
+</section>
+
+<section id="resume">
+  <div class="wrap">
+    <h2>恢复语义：进程死了，接着跑，不重放</h2>
+    <p class="sub">这是本层的核心命题。每个承诺下面都有一条会红的测试。</p>
+    <div class="flow">
+      <div class="step"><div class="idx">进程 1</div><h4>执行到一半</h4><p>工具已施加、结果已回填、快照已落库——然后进程在下一轮模型调用前死亡。</p></div>
+      <div class="step"><div class="idx">进程 2</div><h4>同一 sessionID 再 Run</h4><p>从 checkpoint 读回完整会话历史（系统提示 + 对话 + 工具结果），模型按历史继续。</p></div>
+      <div class="step"><div class="idx">副作用闸</div><h4>重放同一调用</h4><p>模型若重发同一个 toolCallID，闸判 replayed——直接取回既有结果，执行体不会被再次调用。</p></div>
+    </div>
+    <ul class="checks">
+      <li><b>提交点自洽</b>——回填与提交在同一段顺序代码里，崩溃窗口两端各自完整：恢复出来的历史要么有这一段，要么没有。</li>
+      <li><b>不完整历史 fail-closed</b>——assistant 请求了工具但结果缺失＝存储被外部篡改，报错不猜，拒绝静默续跑。</li>
+      <li><b>幂等键同源</b>——toolCallID 由编排侧铸造（可注入），assistant 消息里的 ID 与副作用幂等键是同一份；模型不给 ID 时由 loop 补发。</li>
+      <li><b>结果未知禁止盲重试</b>——远端是否生效由远端说了算：OutcomeUncertain 显式上抛为 res.Uncertain，该键必须先对账裁决。</li>
+      <li><b>预算在调用前判定</b>——roundguard 的额度检查在模型调用之前，用尽按策略强制收尾（ForceFinal 给最后一次终答机会）或直接停止。</li>
+      <li><b>施加次数恒为 1</b>——端到端用例断言：中断恢复后计数器不增。SQLite 形态下跨进程同样成立（库文件即真相）。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="evidence">
+  <div class="wrap">
+    <h2>判据不另写一套</h2>
+    <p class="sub">存储语义全部来自 kernel 契约；本仓只做实现，共享契约套件在真实落库形态上同跑。</p>
+    <table>
+      <tr><th>判据</th><th>证据</th></tr>
+      <tr><td>sideeffect 契约</td><td>kernel sidetest 共享套件（33 子测试：只做一次 / 令牌单调 / 过期接管 / 执行意图 / 对账占用 / 带凭据裁决……）在内存、SQLite、PostgreSQL 三个实现上同跑</td></tr>
+      <tr><td>故障恢复</td><td>PG 参考实现的 SIGKILL 故障恢复 e2e（integration CI，硬失败无环境开洞）；SQLite WAL 崩溃重放由契约用例覆盖</td></tr>
+      <tr><td>恢复语义</td><td>agentloop / runtime 端到端用例：模型死在第二轮前，新 Runtime 接力后执行体调用次数仍为 1</td></tr>
+      <tr><td>门面同款</td><td>SQLite 与 PG 的 11 面访问器集合逐字对位（kernel storagecheck F3 判据，跨仓引用如实降级）</td></tr>
+      <tr><td>权威介入原子性</td><td>PG 强释的「释放 + 审计」同一事务：审计写失败 ⇒ 释放回滚（3 个真 PG 用例钉死）</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="packages">
+  <div class="wrap">
+    <h2>包结构</h2>
+    <p class="sub">六个装配面包 + 三个参考实现 + 两个可运行演示。</p>
+    <table>
+      <tr><th>包</th><th>职责</th></tr>
+      <tr><td>chat</td><td>供应商中立的模型窄接口（唯一模型接缝）与消息类型</td></tr>
+      <tr><td>pipeline</td><td>工具施加管线：toolCallID = 副作用幂等键、会话资源互斥、重试安全性显式声明</td></tr>
+      <tr><td>agentloop</td><td>可恢复回合循环：预算调用前判定、历史落 checkpoint、事件发射</td></tr>
+      <tr><td>storage</td><td>存储装配面：内存判据移植 + SQLite/PG 门面转发</td></tr>
+      <tr><td>runtime</td><td>模板装配：NewEmbedded / NewStandalone（+ 选项注入）</td></tr>
+      <tr><td>observe</td><td>eventbus → 宿主回调（日志 / 指标 / 审计各写一个 Sink）</td></tr>
+      <tr><td>sqliteadapter / pgstore</td><td>SQLite（WAL）与 PostgreSQL 参考实现，11 面统一门面</td></tr>
+      <tr><td>containerbackend</td><td>backend 契约的 Docker Engine / Kubernetes Job 参考实现（含 NetworkPolicy 声明面判据）</td></tr>
+      <tr><td>examples/</td><td>embedded / standalone 演示（中断恢复、跨进程续跑）+ reference-runtime / worker-runtime 接线样板</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>goagent-runtime · MIT · 判据本体归 <a href="https://github.com/yi-nology/goagent-kernel">goagent-kernel</a></div>
+    <div>
+      <a href="https://github.com/yi-nology/goagent-runtime/releases">Releases</a> ·
+      <a href="https://github.com/yi-nology/goagent-runtime/actions">CI</a> ·
+      <a href="https://pkg.go.dev/github.com/yi-nology/goagent-runtime">pkg.go.dev</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
