@@ -1,0 +1,20 @@
+# Dockerfile.probe —— K8s 出站禁网真集群验收用的探测/业务镜像（issue #418）。
+#
+# 两条硬要求（少一条作业根本起不来，断言就永远到不了）：
+#
+#  1. **非 root 运行**：作业 Pod 级带 runAsNonRoot=true，镜像默认用户是 root
+#     ⇒ kubelet 直接拒绝启动（"cannot verify user is non-root"）。
+#  2. **ENTRYPOINT 是 shell**：业务容器的命令是以 args 形态下发的
+#     （"-ec", "<脚本>"），镜像没有 shell 入口点就 exec 不到脚本。
+#
+# 为什么用 busybox wget 而不是 curl：wget 走明文 HTTP ⇒「连不上」与「TLS 失败」
+# 分得开。busybox 未编 TLS，用 https:// 当探测目标会让「探测失败」既可能是被
+# NetworkPolicy 拦下、也可能是压根不会说 HTTPS ⇒ 结论可能是假绿（判据见
+# examples/containerbackend/k8sjob_realcluster_test.go 头部）。
+#
+# 宿主注入探测镜像是**契约**（K8sEgressProbe.Image 由宿主给），本文件只是
+# 「一份满足契约的最小镜像」，供 make k8s-e2e 直接构建。
+FROM alpine:3.20
+RUN adduser -D -u 65532 probe
+USER 65532
+ENTRYPOINT ["/bin/sh"]

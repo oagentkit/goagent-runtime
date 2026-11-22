@@ -1,0 +1,14 @@
+# kind-cluster.yaml —— 真集群验收用的 kind 集群形状（issue #418）。
+#
+# disableDefaultCNI: kind 自带的 kindnet **不实现 NetworkPolicy** ⇒ 数据面
+# 不会拦出站 ⇒ 用例必然假绿（探针连不上不是因为策略，而是因为压根没人拦）。
+# 必须关掉它，另装 Calico（Calico 的 Felix 实现 NetworkPolicy 数据面）。
+#
+# podSubnet 与 Calico 默认 IPPool 对齐（192.168.0.0/16）：Calico 清单里的
+# CALICO_IPV4POOL_CIDR 默认值就是这个段，段不一致会让节点拿到两套互不相通的
+# 地址 ⇒ Pod 之间的连通性判定失真。
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"

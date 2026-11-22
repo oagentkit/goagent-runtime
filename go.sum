@@ -21,12 +21,12 @@ github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsRe
 github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A=
 github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL47Hk=
 github.com/ncruces/go-strftime v1.1.0/go.mod h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g=
+github.com/oagentkit/guardx v0.28.0 h1:+7aKnaJ4HqZLqSMd5QfgI5bTbWy3QYpgPQ1tkIpysQs=
+github.com/oagentkit/guardx v0.28.0/go.mod h1:OzgOOEn1E7MsoRhtywx2d9WhzEYxzK/o2px+EpBXnUg=
 github.com/oekit/concurrency v0.38.1 h1:eGJt9IVc7J3FYN5nNx7OQz1D7Cpm7JtJ+xjIt5Chezw=
 github.com/oekit/concurrency v0.38.1/go.mod h1:aT/K82YRzEviyd1JRLBvrEGDVpqG3uUqCdol+ZlEHo8=
 github.com/oekit/logx v0.11.0 h1:dlDDIqs04ibDJ7HJg1O0gd/gXUbirFc4WPHgjQV5N/w=
 github.com/oekit/logx v0.11.0/go.mod h1:aIxiaegg9jzyvXhGXNcjq7ljAdVC2ERUCHqGN+thui0=
-github.com/oekit/pkg v0.52.0 h1:xh8dtda3oJ83y49yl49VpTYvpyeSVGKlVQswBmVYWms=
-github.com/oekit/pkg v0.52.0/go.mod h1:Cr6sJpBX2a0gAIgLa32+NY69h/UZtuN6L1ZdXtP9upo=
 github.com/oekit/pkg v0.57.0 h1:j0xWweoUxD7tHm4x25Hx7f6sX17WphGik7KD0nZrEJE=
 github.com/oekit/pkg v0.57.0/go.mod h1:Cr6sJpBX2a0gAIgLa32+NY69h/UZtuN6L1ZdXtP9upo=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -38,8 +38,6 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/yi-nology/goagent-kernel v0.63.0 h1:KPlEhRnjDjd7PSWciAL+AdEo6zqOCvPWUXpED4Z10xc=
-github.com/yi-nology/goagent-kernel v0.63.0/go.mod h1:0UlQDdaOaTzMLvV/orvQU1feB4CLnJGJoaBoKfacGks=
 github.com/yi-nology/goagent-kernel v0.66.1 h1:Axkk0uqDFoybEjOo630lERt8Yt+4O/yazozTgxEPvBQ=
 github.com/yi-nology/goagent-kernel v0.66.1/go.mod h1:s57LkTifDK5wJL0z9UoPjqiPl9GRqIvrXsvdkP+g4Zc=
 golang.org/x/mod v0.42.0 h1:ICeL3t2L30ljSPHHxDnR4fqVcBt/zR2zJAb9juavmQg=

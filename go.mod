@@ -4,6 +4,7 @@ go 1.27.4
 
 require (
 	github.com/jackc/pgx/v5 v5.13.0
+	github.com/oagentkit/guardx v0.28.0
 	github.com/oekit/concurrency v0.38.1
 	github.com/oekit/pkg v0.57.0
 	github.com/yi-nology/goagent-kernel v0.66.1
