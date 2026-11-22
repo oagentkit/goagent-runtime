@@ -56,7 +56,9 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 | `chat` | 供应商中立的模型窄接口与消息类型 |
 | `pipeline` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） |
 | `agentloop` | 可恢复回合循环（预算守卫 + 检查点 + 事件） |
-| `storage` | 存储装配面（内存判据移植 / SQLite 复用 kernel 参考实现） |
+| `storage` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） |
+| `sqliteadapter` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） |
+| `pgstore` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） |
 | `runtime` | 模板装配（embedded / standalone） |
 | `observe` | eventbus → 宿主回调 |
 
@@ -64,7 +66,7 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 
 存储判据全部来自 kernel 契约，本仓**不另写一套**：
 
-- `storage` 的内存与 SQLite 两个副作用闸实现都跑 kernel 的 `sidetest` 共享契约套件（33 子测试，含带凭据裁决）；
+- `storage` 的内存、`sqliteadapter`、`pgstore` 三个副作用闸实现都跑 kernel 的 `sidetest` 共享契约套件（33 子测试，含带凭据裁决）；PG 上另有 SIGKILL 故障恢复 e2e（integration CI）；
 - 内存快照存取的单调/拒零序号判据移植自 kernel `examples/reference-runtime`（MIT、同作者）；
 - 恢复语义由 `agentloop` / `runtime` 的端到端用例钉住。
 

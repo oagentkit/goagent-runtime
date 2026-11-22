@@ -20,3 +20,34 @@ jobs:
         run: go test ./... -count=1 -timeout 120s -coverprofile=coverage.out
       - name: Coverage
         run: go tool cover -func=coverage.out | tail -1
+
+  integration:
+    name: integration（PG 参考实现：kernel 共享契约套件 + SIGKILL e2e）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gakref
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gakref"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: PG 契约套件 + 故障恢复 e2e（硬失败，无环境开洞；判据本体归 kernel sidetest/boardtest）
+        env:
+          GAK_PGREF_DSN: postgres://postgres:postgres@localhost:5432/gakref?sslmode=disable
+        run: |
+          CGO_ENABLED=0 go test ./pgstore/ -count=1 -timeout 15m -v

@@ -5,7 +5,7 @@ import (
 
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/examples/sqliteadapter"
+	"github.com/yi-nology/goagent-runtime/sqliteadapter"
 	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 

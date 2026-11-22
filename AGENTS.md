@@ -22,4 +22,5 @@
 - 测试夹具用合成数据；fake model 的 errAt 语义：-1 = 不注入错误，
   >= 0 = 该次调用报错（零值 0 会在首次调用报错——不设就是注入，见
   本仓实录的两次踩坑）。
-- `go test ./... -count=1` 提交前必须全绿。
+- `go test ./... -count=1` 提交前必须全绿；PG 判据用例（`pgstore/`）在无 `GAK_PGREF_DSN` 时显式 skip，不伪造结果。
+- `pgstore/` 与 `sqliteadapter/` 是 kernel 迁移来的参考实现：对 kernel 的 import 只允许契约面（checkpoint/controlplane/eventbus/sideeffect/sidetest/taskboard/tenant），判据本体归 kernel，本仓不另写。

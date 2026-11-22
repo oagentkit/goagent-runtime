@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/yi-nology/goagent-kernel/examples/sqliteadapter"
+	"github.com/yi-nology/goagent-runtime/sqliteadapter"
 	"github.com/yi-nology/goagent-kernel/sidetest"
 
 	"github.com/yi-nology/goagent-runtime/storage"
