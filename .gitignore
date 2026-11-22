@@ -2,3 +2,7 @@
 *.db-wal
 *.db-shm
 /coverage.out
+site/node_modules/
+site/src/.vuepress/dist/
+site/src/.vuepress/.temp/
+site/src/.vuepress/.cache/
