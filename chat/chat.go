@@ -53,10 +53,29 @@ type ToolSpec struct {
 	Parameters string
 }
 
+// Delta 流式增量（OnDelta 回调输入；模型支持流式时逐片调用）。
+type Delta struct {
+	// Kind 增量种类："text" 正文 / "reasoning" 推理过程。词表开放——模型
+	// 不产某类即不回调，宿主按 Kind 分流即可。
+	Kind string
+	// Text 本片增量文本（非累积）。
+	Text string
+}
+
+// 增量种类词表（Kind 取值；开放集，宿主可识别未知 Kind 透传）。
+const (
+	DeltaKindText      = "text"
+	DeltaKindReasoning = "reasoning"
+)
+
 // ChatRequest 一次模型调用请求。
 type ChatRequest struct {
 	Messages []Message
 	Tools    []ToolSpec
+	// OnDelta 可选流式增量回调：非 nil 且模型支持流式时逐片回调（文本
+	// 旁路面），最终结果仍经 ChatResponse 返回——回调不改变响应语义；
+	// 不支持流式的实现可不调用（宿主降级整段接收，nil 语义同缺省）。
+	OnDelta func(Delta)
 }
 
 // ChatResponse 一次模型调用响应。
