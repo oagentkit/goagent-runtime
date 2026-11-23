@@ -27,9 +27,9 @@ title: 机器事实（包 × 依赖 × 能力）
 | `observe` | 1 | 33 | `github.com/oekit/concurrency`、`github.com/yi-nology/goagent-kernel` | eventbus → 宿主回调 | README 包表 |
 | `pgstore` | 19 | 3526 | `github.com/jackc/pgx/v5`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） | README 包表 |
 | `pipeline` | 1 | 171 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | README 包表 |
-| `runtime` | 1 | 193 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
+| `runtime` | 1 | 194 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
 | `sqliteadapter` | 20 | 3885 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel`、`modernc.org/sqlite` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） | README 包表 |
-| `storage` | 4 | 565 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） | README 包表 |
+| `storage` | 3 | 526 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） | README 包表 |
 
 ## README 包表 ⇄ 磁盘目录（对账）
 

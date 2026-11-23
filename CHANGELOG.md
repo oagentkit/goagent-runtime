@@ -2,6 +2,14 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.1] — 2026-11-23
+
+### 重构(storage)：storage 纯化拆分——sqlite.go 移 storage/sqlitestore（modernc 驱动边不进纯化包；bianque 双 driver 注册 panic 实弹）+ *SQLite 补 CommitWithEvents 转发（批662 assemble 能力断言恒 false 缺口）+ 检测回归钉
+
+- cf60a3f
+
+- 文档(changelog)：补 v0.6.0 版本段（tag 已打，生成器对账）+ 站点 releases 追平
+
 ## [v0.6.0] — 2026-11-23
 
 ### 新增(chat)：流式增量回调 OnDelta + agentloop content_delta 事件
