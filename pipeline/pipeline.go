@@ -59,6 +59,10 @@ type Tool struct {
 	// 重试不会重复施加副作用）。未声明（false）= 按最弱处理：施加失败即
 	// 结果未知，必须先对账。
 	Safe bool
+	// NeedsApproval 执行前人工审批声明（true = 该工具每次调用先过
+	// agentloop.Config.ApprovalGate；拒绝 ⇒ 副作用不施加，拒绝以工具观察
+	// 回喂模型，模型可自行改道）。
+	NeedsApproval bool
 	// IdempotencyKey 业务幂等键（**可选**）：宿主按业务语义给出「同一次
 	// 业务动作」的稳定键（订单号、消息 ID、批次号……）。
 	//
@@ -120,6 +124,15 @@ func New(st sideeffect.Store, ttl time.Duration, tools []Tool) (*Pipeline, error
 
 // Specs 暴露给模型的工具面（注册顺序稳定，prompt 稳定性）。
 func (p *Pipeline) Specs() []chat.ToolSpec { return append([]chat.ToolSpec(nil), p.specs...) }
+
+// NeedsApproval 该名字的工具是否声明了执行前人工审批（未注册的名字恒 false）。
+func (p *Pipeline) NeedsApproval(name string) bool {
+	t, ok := p.tools[name]
+	if !ok {
+		return false
+	}
+	return t.NeedsApproval
+}
 
 // Execute 施加一次工具调用。
 //

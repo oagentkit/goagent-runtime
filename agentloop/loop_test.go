@@ -418,3 +418,150 @@ func TestEmitFailureObservable(t *testing.T) {
 		t.Fatalf("OnEmitError 应逐次回调 4 次，got %d", cb)
 	}
 }
+
+// approvalGateSpy 记录询问次数的审批闸（并发面用 mutex 锁住）。
+type approvalGateSpy struct {
+	mu       sync.Mutex
+	asked    int
+	approved bool
+	err      error
+}
+
+func (g *approvalGateSpy) gate(_ context.Context, _ string, _ chat.ToolCall) (bool, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.asked++
+	return g.approved, g.err
+}
+
+func (g *approvalGateSpy) asks() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.asked
+}
+
+// newGatedLoop 装配带审批闸的测试循环（单工具 calc，NeedsApproval 可调）。
+func newGatedLoop(t *testing.T, m chat.Model, c *counter, budget roundguard.Budget,
+	needsApproval bool, gate func(context.Context, string, chat.ToolCall) (bool, error)) (*agentloop.Loop, *storage.Mem) {
+	t.Helper()
+	mem := storage.NewMem()
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{
+		Name: "calc", Safe: true, Handler: c.handler, NeedsApproval: needsApproval,
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	l, err := agentloop.New(agentloop.Config{
+		Model: m, Tools: pipe, Store: mem.Checkpoints(),
+		Budget: budget, ApprovalGate: gate,
+	})
+	if err != nil {
+		t.Fatalf("建循环失败: %v", err)
+	}
+	return l, mem
+}
+
+// TestApprovalGateApproved 声明 NeedsApproval 的工具执行前过闸；批准 ⇒ 施加。
+func TestApprovalGateApproved(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "终答"},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{approved: true}
+	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	res, err := l.Run(context.Background(), "sess-gate-ok", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("批准后应走完回合，got %s", res.Status)
+	}
+	if c.count() != 1 {
+		t.Fatalf("批准后工具应执行 1 次，got %d", c.count())
+	}
+	if g.asks() != 1 {
+		t.Fatalf("闸应被询问 1 次，got %d", g.asks())
+	}
+}
+
+// TestApprovalGateDenied 拒绝 ⇒ 副作用不施加，拒绝以工具观察回喂模型，
+// 模型可改道收尾。
+func TestApprovalGateDenied(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "收到拒绝，改道终答"},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{approved: false}
+	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	res, err := l.Run(context.Background(), "sess-gate-deny", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("拒绝后模型改道终答应 succeeded，got %s", res.Status)
+	}
+	if c.count() != 0 {
+		t.Fatalf("拒绝后副作用不得施加，执行计数应 0，got %d", c.count())
+	}
+	if g.asks() != 1 {
+		t.Fatalf("闸应被询问 1 次，got %d", g.asks())
+	}
+	// 拒绝观察进了历史：最后一次模型请求的 messages 里应含拒绝文本。
+	for _, msg := range m.lastRequest().Messages {
+		if msg.Role == chat.RoleTool && strings.Contains(msg.Content, "审批拒绝") {
+			return
+		}
+	}
+	t.Fatal("拒绝观察未回喂模型（messages 里找不到含「审批拒绝」的 tool 消息）")
+}
+
+// TestApprovalGateError 闸失败 ⇒ fail-closed：本轮失败上抛，工具不执行。
+func TestApprovalGateError(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{err: kerrors.New("审批服务不可达")}
+	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	res, err := l.Run(context.Background(), "sess-gate-err", "开始")
+	if err == nil {
+		t.Fatal("闸失败必须 fail-closed 上抛")
+	}
+	if c.count() != 0 {
+		t.Fatalf("闸失败后副作用不得施加，执行计数应 0，got %d", c.count())
+	}
+	if !strings.Contains(err.Error(), "审批闸失败") {
+		t.Fatalf("错误应含「审批闸失败」语境，got %v", err)
+	}
+	_ = res
+}
+
+// TestApprovalGateOnlyMarkedTools 未声明 NeedsApproval 的工具不过闸、直通执行。
+func TestApprovalGateOnlyMarkedTools(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "终答"},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{approved: true}
+	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, false, g.gate)
+
+	res, err := l.Run(context.Background(), "sess-gate-skip", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("应 succeeded，got %s", res.Status)
+	}
+	if c.count() != 1 {
+		t.Fatalf("未标记工具应直通执行，got %d", c.count())
+	}
+	if g.asks() != 0 {
+		t.Fatalf("未标记工具不得过闸，询问应 0 次，got %d", g.asks())
+	}
+}

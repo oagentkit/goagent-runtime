@@ -86,6 +86,13 @@ type Config struct {
 	// OnEmitError 事件发射失败的宿主回调；nil = 只计数不回调。发射失败从此
 	// 不再静默吞（issue #2 可观测面：孤儿事件/终态事件丢失从此可见）。
 	OnEmitError func(err error)
+	// ApprovalGate 工具执行前的人工审批闸（issue #4 第一切片=同步闸，仅对
+	// 声明了 pipeline.Tool.NeedsApproval 的工具生效）。approved=false ⇒ 副作用
+	// 不施加，拒绝以工具观察回喂模型（可自行改道）；err ≠ nil ⇒ fail-closed
+	// 本轮失败上抛（闸失败=无法证明获准）。闸内等待由宿主实现（轮询/等
+	// channel），ctx 超时仍归循环管；nil = 无审批面。异步挂起/恢复形态
+	// （挂起即快照、凭 token 续跑）留后续切片。
+	ApprovalGate func(ctx context.Context, sessionID string, call chat.ToolCall) (bool, error)
 }
 
 // Result 一次 Run 的结果。
@@ -221,12 +228,33 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 				stopped = true
 				break
 			}
-			if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
-				res.Status = contract.StatusTimedOut
-				stopped = true
-				break
-			}
-			out := l.cfg.Tools.Execute(ctx, sessionID, call)
+				if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
+					res.Status = contract.StatusTimedOut
+					stopped = true
+					break
+				}
+				// 执行前人工审批闸（issue #4）：只闸声明了 NeedsApproval 的工具。
+				if l.cfg.ApprovalGate != nil && l.cfg.Tools.NeedsApproval(call.Name) {
+					approved, err := l.cfg.ApprovalGate(ctx, sessionID, call)
+					if err != nil {
+						// fail-closed：闸失败=无法证明获准，副作用不施加。
+						return res, errors.Wrap(err, "审批闸失败", "session", sessionID, "tool", call.Name)
+					}
+					if !approved {
+						// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
+						messages = append(messages, chat.Message{
+							Role:       chat.RoleTool,
+							Content:    "工具调用被人工审批拒绝，副作用未施加；请调整方案或改用其他工具。",
+							ToolCallID: call.ID,
+						})
+						done = append(done, call.ID)
+						l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+							"call_id": call.ID, "tool": call.Name, "outcome": "approval_denied",
+						})
+						continue
+					}
+				}
+				out := l.cfg.Tools.Execute(ctx, sessionID, call)
 			used.ToolCalls++
 			used.Tools[call.Name]++
 			res.ToolCalls = used.ToolCalls
