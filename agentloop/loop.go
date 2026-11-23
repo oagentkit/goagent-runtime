@@ -44,6 +44,10 @@ import (
 // fieldHistory 快照 Fields 里会话历史的键。
 const fieldHistory = "history"
 
+// defaultForceFinalPrompt 强制收尾提示词缺省文案（宿主未注入 ForceFinalPrompt
+// 时回落到这里；文案逐字保留=兼容基线）。
+const defaultForceFinalPrompt = "预算已用尽：请基于已有信息立即给出最终回答，不要再调用工具。"
+
 // 事件类型词表（eventbus typ 字段取值）。
 const (
 	EventRoundStart   = "agent.round_start"
@@ -76,6 +80,12 @@ type Config struct {
 	System string
 	// NewID 工具调用 ID 铸造器；nil = 默认（crypto/rand + 进程内回退）。
 	NewID func() string
+	// ForceFinalPrompt 预算用尽时注入的强制收尾提示词，宿主注入（i18n/调口径
+	// 的接缝）；空值 = 缺省文案（issue #3：提示词是领域概念，不硬编码在 loop 层）。
+	ForceFinalPrompt string
+	// OnEmitError 事件发射失败的宿主回调；nil = 只计数不回调。发射失败从此
+	// 不再静默吞（issue #2 可观测面：孤儿事件/终态事件丢失从此可见）。
+	OnEmitError func(err error)
 }
 
 // Result 一次 Run 的结果。
@@ -90,6 +100,9 @@ type Result struct {
 	ToolCalls int
 	// Uncertain 结果未知的 toolCallID（须先对账，禁止盲目重试）。
 	Uncertain []string
+	// EmitFailed 事件发射失败次数（checkpoint 已提交但事件未落库 = 孤儿事件
+	// / 终态事件丢失的可观测面；恢复重跑须自行对账）。
+	EmitFailed int
 }
 
 // Loop 可恢复的回合循环。
@@ -153,7 +166,7 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 					forced = true
 					messages = append(messages, chat.Message{
 						Role:    chat.RoleUser,
-						Content: "预算已用尽：请基于已有信息立即给出最终回答，不要再调用工具。",
+						Content: l.forceFinalPrompt(),
 					})
 				} else {
 					res.Status = contract.StatusTimedOut
@@ -186,7 +199,7 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 			Content:   resp.Content,
 			ToolCalls: calls,
 		})
-		l.emit(ctx, sessionID, EventRoundStart, map[string]any{
+		l.emit(ctx, res, sessionID, EventRoundStart, map[string]any{
 			"round": used.Rounds, "tool_calls": len(calls),
 		})
 
@@ -223,7 +236,7 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 				ToolCallID: call.ID,
 			})
 			done = append(done, call.ID)
-			l.emit(ctx, sessionID, EventToolCall, map[string]any{
+			l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
 				"call_id": call.ID, "tool": call.Name, "outcome": string(out.Kind),
 			})
 			if out.Kind == pipeline.KindUncertain {
@@ -242,7 +255,7 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 	if err := l.commit(ctx, sessionID, messages, done, res.Status); err != nil {
 		return res, err
 	}
-	l.emit(ctx, sessionID, EventSessionState, map[string]any{"status": res.Status})
+	l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
 	return res, nil
 }
 
@@ -339,12 +352,27 @@ func (l *Loop) newID() string {
 		hex.EncodeToString([]byte{byte(l.fallback.Add(1))})
 }
 
+// forceFinalPrompt 强制收尾提示词：宿主注入优先，空值回落缺省文案。
+func (l *Loop) forceFinalPrompt() string {
+	if l.cfg.ForceFinalPrompt != "" {
+		return l.cfg.ForceFinalPrompt
+	}
+	return defaultForceFinalPrompt
+}
+
 // emit 出事件；无发射面时静默跳过（不出事件是合法配置，不是错误）。
-func (l *Loop) emit(ctx context.Context, sessionID, typ string, payload map[string]any) {
+// 发射失败不再静默吞（issue #2）：计数进 Result.EmitFailed，宿主配了
+// OnEmitError 就回调——孤儿事件/终态事件丢失要可观测。
+func (l *Loop) emit(ctx context.Context, res *Result, sessionID, typ string, payload map[string]any) {
 	if l.cfg.Emitter == nil {
 		return
 	}
-	_ = l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload)
+	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload); err != nil {
+		res.EmitFailed++
+		if l.cfg.OnEmitError != nil {
+			l.cfg.OnEmitError(err)
+		}
+	}
 }
 
 // busEmitter 把 eventbus.Broadcast 包成 Emitter（embedded 形态默认）。

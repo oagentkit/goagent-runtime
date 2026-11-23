@@ -332,3 +332,89 @@ func TestNilPartsRejected(t *testing.T) {
 		t.Fatal("非法预算必须装配期报错（负额度不得静默降级为不限）")
 	}
 }
+
+// TestForceFinalPromptCustom 收尾提示词宿主注入（runtime issue #3）：
+// 提示词是领域概念，硬编码在 loop 层=宿主 i18n/调口径无接缝。
+// 断言收尾轮注入的是宿主文案；缺省回落路径由既有 TestBudgetForceFinal
+// 的行为面覆盖（文案逐字保留）。
+func TestForceFinalPromptCustom(t *testing.T) {
+	mem := storage.NewMem()
+	c := &counter{}
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{Name: "calc", Safe: true, Handler: c.handler}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{ToolCalls: []chat.ToolCall{{ID: "call-2", Name: "calc", Arguments: "{}"}}},
+		{Content: "自定义收尾终答"},
+	}}
+	l, err := agentloop.New(agentloop.Config{
+		Model: m, Tools: pipe, Store: mem.Checkpoints(),
+		Budget:           roundguard.Budget{MaxRounds: 2, Policy: roundguard.PolicyForceFinal},
+		ForceFinalPrompt: "预算告罄：请用现有材料作答。",
+	})
+	if err != nil {
+		t.Fatalf("建循环失败: %v", err)
+	}
+
+	res, err := l.Run(context.Background(), "sess-ffp", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("收尾轮给出终答应为 succeeded，got %s", res.Status)
+	}
+	last := m.lastRequest()
+	n := len(last.Messages)
+	if n == 0 || last.Messages[n-1].Role != chat.RoleUser || last.Messages[n-1].Content != "预算告罄：请用现有材料作答。" {
+		t.Fatalf("收尾轮应注入宿主自定义文案，got %+v", last.Messages[n-1])
+	}
+}
+
+// failEmitter 恒失败的发射面（issue #2 可观测面用例）。
+type failEmitter struct{}
+
+func (failEmitter) Publish(_ context.Context, _ string, _ string, _ *uint64, _ string, _ string, _ map[string]any) error {
+	return kerrors.New("事件总线不可达")
+}
+
+// TestEmitFailureObservable 发射失败不再静默吞（runtime issue #2）：
+// 计数进 Result.EmitFailed，宿主 OnEmitError 逐次回调——孤儿事件/
+// 终态事件丢失从「无人知」变可观测。
+func TestEmitFailureObservable(t *testing.T) {
+	mem := storage.NewMem()
+	c := &counter{}
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{Name: "calc", Safe: true, Handler: c.handler}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	var cb int
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "终答"},
+	}}
+	l, err := agentloop.New(agentloop.Config{
+		Model: m, Tools: pipe, Store: mem.Checkpoints(),
+		Emitter:     failEmitter{},
+		OnEmitError: func(err error) { cb++ },
+	})
+	if err != nil {
+		t.Fatalf("建循环失败: %v", err)
+	}
+
+	res, err := l.Run(context.Background(), "sess-emit", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("应 succeeded，got %s", res.Status)
+	}
+	// 两轮 round_start + 一次 tool_call + 终态 session_state = 4 次发射。
+	if res.EmitFailed != 4 {
+		t.Fatalf("四轮事件应全失败计数 4，got %d", res.EmitFailed)
+	}
+	if cb != 4 {
+		t.Fatalf("OnEmitError 应逐次回调 4 次，got %d", cb)
+	}
+}
