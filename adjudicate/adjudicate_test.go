@@ -194,6 +194,26 @@ func TestGraceWindowAndBatch(t *testing.T) {
 	}
 }
 
+// TestGraceZeroExplicit WithGrace(0) 显式不等待：cutoff=now（即时对账/测试
+// 形态）——0 是合法显式值而非「忽略」。
+func TestGraceZeroExplicit(t *testing.T) {
+	ctx := context.Background()
+	runner, _ := newRunner(t)
+	src := &fakeSource{}
+	loop, err := adjudicate.NewLoop(src, adjudicate.NewRouter(), runner, adjudicate.WithGrace(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now()
+	if _, err := loop.ReconcileOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// cutoff 应≈now（不落后 5m 缺省）。
+	if src.cutoffSeen.Before(before.Add(-time.Second)) {
+		t.Fatalf("grace=0 的 cutoff 应≈now, got %v", src.cutoffSeen)
+	}
+}
+
 // TestNewLoopFailFast 装配期缺件 fail-fast。
 func TestNewLoopFailFast(t *testing.T) {
 	runner, _ := newRunner(t)

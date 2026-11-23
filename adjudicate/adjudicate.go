@@ -147,11 +147,12 @@ type Loop struct {
 // LoopOption 装配选项。
 type LoopOption func(*Loop)
 
-// WithGrace 未知态静置窗（默认 DefaultGrace）。须覆盖施加方「失败→标未知
-// →释放」的最长窗口，否则对账会与在途动作抢判。
+// WithGrace 未知态静置窗（默认 DefaultGrace；显式 0 = 不等待，测试/即时
+// 对账形态）。须覆盖施加方「失败→标未知→释放」的最长窗口，否则对账会与
+// 在途动作抢判；负值忽略（保持缺省）。
 func WithGrace(d time.Duration) LoopOption {
 	return func(l *Loop) {
-		if d > 0 {
+		if d >= 0 {
 			l.grace = d
 		}
 	}
