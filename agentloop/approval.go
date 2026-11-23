@@ -138,7 +138,7 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 	}
 
 	// 决策与回填同段提交（挂起恢复窗口的两端各自自洽），接主驱动循环续跑。
-	if err := l.commit(ctx, sessionID, messages, done, contract.StatusRunning); err != nil {
+	if err := l.commit(ctx, res, sessionID, messages, done, contract.StatusRunning); err != nil {
 		return res, err
 	}
 	return l.drive(ctx, sessionID, messages, done, used, res)
