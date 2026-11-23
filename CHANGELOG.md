@@ -2,6 +2,100 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.5.0] — 2026-11-23
+
+### 新增(adjudicate)：副作用未知态周期裁决框架（#1）
+
+kernel 判据把「结果未知」的 Key 硬阻塞（再动即重复施加），pipeline 分
+类出 KindUncertain——但 uncertain 之后没有下文。本包把「证据回查→三态
+判定→落裁决」变成机制（提出方 argus internal/effect 生产实证，多版本
+迭代在役；domain 裁决器留宿主，本包零业务词）：
+- Source 接口：枚举未知态 Key（kernel Store 契约只有 Mark/Resolve 无
+  枚举——枚举是宿主存储面的事，AGENTS 边界纪律不另写判据）
+- grace 静置窗（DefaultGrace 5m）：给施加方「失败→标未知→释放」窗口，
+  避免与在途动作抢判；batch 上限（DefaultBatch 50）
+- Router 裁决分发：按声明顺序第一个「认识」的生效；error 透传=判据不足
+  本轮不裁决（判据不足≠未生效——把「查不到」当「没生效」放行就是二次
+  施加入口）；全不认识=Skipped 留痕绝不猜
+- Loop.ReconcileOnce 无副作用单轮（周期由宿主 ticker 驱动，不起 goroutine），
+  单行失败不阻断；Stats 积压/裁决分布可观测
+- 落裁决走 kernel Runner.Reconcile（ForceRetryable/重放语义归 kernel，
+  本仓不发明第二套判据——AGENTS 红线）；oekit/pkg/errors 单源不混 stdlib
+测试七组（storage.NewMem 契约实现 + 合成 Source/Resolver）：已生效记完成
+后 Acquire 重放取既有结果/safe 未生效释放重授予（资源栅栏 TTL 正交实证）/
+无人认识跳过不改态/判据不足 defer 且 Key 原样/grace·batch 参数如实透传/
+装配期 fail-fast/Router 顺序与 error 短路口径。
+* docs(site): 生成页同步——adjudicate 包入站点事实面
+
+### 新增(pgstore,cluster)：联合提交面 PG 形态——cluster worker 事件随快照单事务（part of #9；pgEmitter 落库职责并入联合提交，转发语义不变）
+
+- 37d526f
+
+### 新增(storage,agentloop)：联合提交面——事件行与快照行同生共死（fixes #2 主体：孤儿事件/终态丢失/恢复重复三窗口在 SQLite 形态结构闭合；Joint 模式自动装配）
+
+- c0eade2
+
+### 新增(agentloop)：审批闸异步挂起/恢复——三态决策闸+awaiting 快照+Approve 续跑（fixes #4；780baa3 同步闸+本笔异步形态=完整闭环）
+
+- 99160ce
+
+### 新增(agentloop,pipeline)：工具执行前人工审批闸第一切片（part of #4，同步闸：NeedsApproval 声明+闸拒绝回喂+fail-closed）
+
+- 780baa3
+
+### 新增(agentloop)：收尾提示词宿主注入 + 事件发射失败可观测（fixes #3, fixes #2 可观测面）
+
+- 8c24915
+
+### 新增(site)：补齐参考面（CHANGELOG / ADR / llms.txt）+ 导航补本站 llms.txt 与决策记录
+
+- e7b087c
+
+### 新增(site)：主导航统一成 kernel 形状 + 补参考页（机器事实 / 门禁体系 / 坑速查）
+
+- 33622fd
+
+### 修复(agentloop)：approval.go 补 commit 新签名缺的 res 实参（99160ce 改签名漏改调用点，main 编译红）
+
+- 108c1a8
+
+- 杂务(site)：跟平生成物（agentloop 生产行数随 #2/#3 变更）
+
+8c24915 改了 agentloop/loop.go，生产行数 333 → 359，机器事实页与 llms.txt
+的行数快照随之失效 ⇒ CI「生成页同步校验」判红（site 作业 failure / exit 1）。
+本提交只重新生成这两个产物，未手改生成物：
+- site/src/reference/packages.md
+- site/src/.vuepress/public/llms.txt
+本地校验：gen_reference_pages.mjs --check → OK：13 个生成产物与仓库事实同步；
+npm run build → 自测 + 链接门禁（29 页）+ vuepress 构建（30 页）全绿。
+
+
+- 文档(agents)：会话操作纪律——腐化病防线（报成功≠安全须核盘/单调用块/照抄已验证源/渗盘即洗，bianque 批656 渗盘实录移植）
+
+- 格式(site)：站点三态配色（白 / 暗 / 自动）+ 对齐 kernel 视觉语言 + 首页配套链接行
+
+runtime 站此前跑的是 VuePress 默认调色板（绿品牌色），与 kernel 站那套 GitHub 风
+不是同一种视觉语言 ⇒ 读者在两站之间来回跳，会读成「这是另一个站」。
+改动：
+- 新增 styles/index.scss：与 kernel 站逐值对齐的两套配色板
+  （亮 = GitHub Light 官方值，暗 = kernel 迁站前那套深色），外加 hero /
+  特性卡 / 首页胶囊行的样式；品牌辅色在亮色下压深一档（#58a6ff 在白底上
+  对比度不足）。
+- 新增 components/ThemeModeSwitch.vue：用 VuePress 的公开别名机制
+  （app.pluginApi.hooks.alias）替换主题自带的 VPToggleColorModeButton，
+  给出「跟随系统 / 亮色 / 暗色」三态入口。接的是主题**同一份**存储
+  （localStorage['vuepress-color-scheme']），不是另造一套配色逻辑。
+  为什么必须覆盖：VuePress 2 的原生开关只有两态（亮 ⇄ 暗），
+  「跟随系统」只是**首次访问**时的取值来源，用户手动切过之后就再也回不到。
+- config.ts：colorMode 'auto' + colorModeSwitch true；别名覆盖的 plugins；
+  顶栏加「AI 直读」下拉（站群配套链接，与 kernel 站同一入口同一标题）；
+  theme-color 改为跟随系统明暗（固定一个值总有一半模式对不上）。
+- README.md：首页加压轴横幅 / 安装条 / 配套链接胶囊行（正文链接按本仓
+  链接门禁的纪律自带 base 前缀——原生 <a> 不加工 base，子路径部署下 404）。
+验证：npm run build 全绿（含站点内部链接门禁：18 个页面）；浏览器实测三态
+往返（auto → light → dark）与 ArchDiagram 自身的 --ad-* 配色同步切换。
+
+
 ## [v0.4.2] — 2026-11-23
 
 - 格式(site)：架构图按 goagent-kernel 站视觉口径重绘（分层卡片 + 单向箭头 + 图注）
