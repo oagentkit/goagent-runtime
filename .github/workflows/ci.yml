@@ -72,6 +72,25 @@ jobs:
       - name: 内部链接检查（子路径部署下的 404 防线）
         run: node site/scripts/check-links.mjs
 
+  changelog:
+    name: CHANGELOG 同步校验（与 git 历史对账）
+    # CHANGELOG.md 由家族工具 matrix-tools/scripts/gen_changelogs.py 从 git 历史生成，
+    # 本仓不自研第二份生成器。工具钉在下面这个 SHA——上游改动不得把本仓 CI 弄红。
+    # 判据口径是「覆盖级」：提交版可以更丰富（手写发布说明留着），缺内容则红。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 —— 生成器要读全部 tag，浅克隆只有 0 个 tag
+          fetch-depth: 0
+      - name: 取家族工具（钉住版本）
+        run: |
+          git clone --quiet https://github.com/oagentkit/matrix-tools.git /tmp/matrix-tools
+          cd /tmp/matrix-tools
+          git checkout --quiet efa5dea012ce9b7843cda282eb74cf712099d76a
+      - name: CHANGELOG 与 git 历史对账
+        run: python3 /tmp/matrix-tools/scripts/gen_changelogs.py --repo goagent-runtime --root "$GITHUB_WORKSPACE/.." --check
+
   site:
     name: 站点构建（生成页同步 + 链接门禁 + 构建）
     # 站点的「机器事实 / 门禁体系 / 坑速查」三页是**生成物**：由

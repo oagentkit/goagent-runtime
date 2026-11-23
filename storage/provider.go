@@ -7,8 +7,8 @@
 //
 //  1. Provider 把 runtime 需要的存储面**汇总成一个注入点**；
 //  2. NewMem 给 embedded 形态（单进程，判据移植自 kernel 参考运行时）；
-//  3. OpenSQLite 给 standalone 形态（真 SQLite WAL，直接复用 kernel 的
-//     examples/sqliteadapter 参考实现——runtime 是装配层，import 参考实现
+//  3. OpenSQLite 给 standalone 形态（真 SQLite WAL，直接复用本仓的
+//     sqliteadapter 参考实现——runtime 是装配层，import 参考实现
 //     正是它的职责；kernel 仓「内核包不拖驱动」的纪律管不到这里）。
 package storage
 

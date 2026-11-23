@@ -10,8 +10,8 @@ import (
 )
 
 // SQLite standalone 形态的 Provider：真 SQLite WAL 单文件库。
-// 存储本体是 kernel examples/sqliteadapter 的参考实现（BEGIN IMMEDIATE /
-// WAL / busy_timeout 那套判据已在 kernel 仓用契约套件 + e2e 验证过），
+// 存储本体是本仓 sqliteadapter 的参考实现（BEGIN IMMEDIATE /
+// WAL / busy_timeout 那套判据已用 kernel 契约套件 + 本仓 e2e 验证过），
 // 本类型只做门面转发与生命周期。
 type SQLite struct {
 	st *sqliteadapter.Store

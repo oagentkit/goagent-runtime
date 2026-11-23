@@ -23,13 +23,19 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const SITE = join(HERE, '..')
 const REPO = join(SITE, '..')
 const OUT = join(SITE, 'src', 'reference')
+const ADR_OUT = join(SITE, 'src', 'adr')
+const PUBLIC = join(SITE, 'src', '.vuepress', 'public')
+const MANIFEST = join(SITE, 'src', '.vuepress', 'adr-manifest.json')
 const DATA = join(SITE, 'data', 'pitfalls.json')
 const KERNEL_MOD = 'github.com/yi-nology/goagent-kernel'
 
 const read = (p) => readFileSync(p, 'utf8')
 const readRepo = (p) => read(join(REPO, p))
 
+// 自测模式下 fail 抛错而不是退出——否则自测没法断言「解析失效必须判红」。
+let selftestMode = false
 function fail(msg) {
+  if (selftestMode) throw new Error('SELFTEST_FAIL: ' + msg)
   console.error('gen_reference_pages.mjs: ' + msg)
   process.exit(1)
 }
@@ -292,12 +298,30 @@ function loadCiJobs(src) {
   // 交叉校验：解析出的作业数 / 步骤数必须与文件里的字面量一致。
   // 不一致 = 有内容没被解析到（缩进变了 / key 改名）⇒ 当场红，
   // 而不是生成一份少几条作业的清单（少一条的清单读起来完全正常）。
+  //
+  // 关键：校验器与解析器**故意不同源**。
+  // 校验器数「块头」（后面跟着更深缩进的键），键名不限字符集；
+  // 解析器只认 GitHub Actions 的合法字符集（[\w-]+）且写死缩进 2。
+  // 两者若用同一个条件，就等于自己判自己——漂移时一起变绿，
+  // 而「判据变绿」正是本仓反复说的那类最贵的失效。
   const tail = lines.slice(jobsIdx + 1)
-  const rawJobs = tail.filter((l) => /^ {2}[\w-]+:\s*$/.test(l)).length
+  const blockHeaders = []
+  for (let i = 0; i < tail.length; i++) {
+    const m = /^(\s+)([^:\s][^:]*):\s*$/.exec(tail[i])
+    if (!m) continue
+    const ind = m[1].length
+    if (ind < 2) continue
+    const next = tail.slice(i + 1).find((x) => x.trim() !== '')
+    if (!next) continue
+    if (next.length - next.trimStart().length > ind) blockHeaders.push(ind)
+  }
+  if (!blockHeaders.length) fail('ci.yml 的 jobs 段解析不出块头——结构变了？')
+  const firstLevel = Math.min.apply(null, blockHeaders)
+  const rawJobs = blockHeaders.filter((ind) => ind === firstLevel).length
   const rawSteps = tail.filter((l) => /^ {6}- /.test(l)).length
   const parsedSteps = jobs.reduce((n, j) => n + j.steps.length, 0)
   if (rawJobs !== jobs.length) {
-    fail('ci.yml 作业数对不上：字面量 ' + rawJobs + ' 个，解析出 ' + jobs.length + ' 个（缩进或 key 变了？）')
+    fail('ci.yml 作业数对不上：块头 ' + rawJobs + ' 个，解析出 ' + jobs.length + ' 个（缩进或 key 变了？）')
   }
   if (rawSteps !== parsedSteps) {
     fail('ci.yml 步骤数对不上：字面量 ' + rawSteps + ' 个，解析出 ' + parsedSteps + ' 个（缩进或 key 变了？）')
@@ -515,20 +539,302 @@ function renderPitfalls(data, goMod) {
   return L.join('\n')
 }
 
+// ── ADR（决策记录）──────────────────────────────────────────────────────
+//
+// ADR 是**手写的仓内真相源**（docs/adr/），站点只做投影——
+// 与 kernel 站 site/gen.mjs 同一口径：仓内是真相，站点不手抄第二份。
+function parseAdr(raw, name) {
+  const id = (raw.match(/^# ADR-(\d{4})/) || [])[1]
+  if (!id) fail(name + '：文件头不含 ADR-NNNN 编号')
+  const h1 = raw.split('\n').find((l) => l.startsWith('# ADR-'))
+  if (!h1) fail(name + '：找不到一级标题（# ADR-NNNN · 标题）')
+  const title = h1.replace(/^#\s*ADR-\d{4}\s*·\s*/, '').trim()
+  const sum = (raw.match(/^> \*\*一句话结论\*\*：(.+)$/m) || [])[1]
+  if (!sum) fail(name + '：找不到「一句话结论」——索引与站点摘要都要用它')
+  const st = (raw.match(/^\| \*\*状态\*\* \| (.+) \|$/m) || [])[1]
+  if (!st) fail(name + '：找不到「状态」行')
+  return { id: 'ADR-' + id, title, summary: sum.trim(), status: st.trim(), file: name, raw }
+}
+
+function loadAdrs() {
+  const dir = join(REPO, 'docs', 'adr')
+  let names
+  try {
+    names = readdirSync(dir).filter((n) => /^ADR-\d{4}-.*\.md$/.test(n)).sort()
+  } catch (e) {
+    fail('读不到 docs/adr/ 目录：' + e.message)
+  }
+  if (!names.length) fail('docs/adr/ 下没有 ADR-*.md——ADR 目录被清空了？')
+  return names.map((name) => parseAdr(read(join(dir, name)), name))
+}
+
+// ── 版本记录（从 CHANGELOG.md 投影）────────────────────────────────────
+function loadReleases(src) {
+  const out = []
+  let cur = null
+  for (const line of src.split('\n')) {
+    const h = /^## \[(v[\d.]+)\] — (.+)$/.exec(line)
+    if (h) {
+      cur = { version: h[1], date: h[2].trim(), subject: '' }
+      out.push(cur)
+      continue
+    }
+    if (cur && !cur.subject) {
+      // 家族生成器有两种渲染：conventional commit 走「### 标题」小标题，
+      // 其余走「- 条目」列表——两种都要认，否则主题会空着（读起来像漏了内容）。
+      const t = /^### (.+)$/.exec(line)
+      const b = /^-\s+(.+)$/.exec(line)
+      if (t) cur.subject = t[1].trim()
+      else if (b) cur.subject = b[1].trim()
+    }
+  }
+  if (!out.length) fail('CHANGELOG.md 解析出 0 个版本段——段头格式变了？')
+  return out
+}
+// ── 页：决策记录（ADR）─────────────────────────────────────────────────
+const GH_REPO = 'https://github.com/yi-nology/goagent-runtime'
+
+function renderAdrIndex(adrs) {
+  const L = [
+    '---',
+    'title: 决策记录（ADR）',
+    '---',
+    '',
+    '# 决策记录（ADR）',
+    '',
+    '::: warning 本页由 ' + code('site/scripts/gen_reference_pages.mjs') + ' 从仓内 ' + code('docs/adr/') + ' 生成，勿手改',
+    '决策记录是**设计推导与取舍**的真相源；README 只留结论，推导一律在仓内 ADR。',
+    ':::',
+    '',
+    '| 编号 | 决策 | 一句话结论 | 状态 |',
+    '|---|---|---|---|',
+    ...adrs.map(
+      (a) =>
+        '| [' + a.id + '](/goagent-runtime/adr/' + a.file.replace(/\.md$/, '.html') + ') | ' +
+        cell(a.title) + ' | ' + cell(escAngles(a.summary)) + ' | ' + cell(a.status) + ' |'
+    ),
+    '',
+    '> 仓内索引：' + GH_REPO + '/blob/main/docs/adr/README.md（新增 ADR 的流程写在那里）。',
+    ''
+  ]
+  return L.join('\n')
+}
+
+function renderAdrPage(a) {
+  const body = a.raw.split('\n').slice(1).join('\n')
+  return [
+    '---',
+    'title: ' + a.id + ' · ' + a.title,
+    'description: ' + a.summary,
+    '---',
+    '',
+    escAngles(body),
+    ''
+  ].join('\n')
+}
+
+// ── 页：版本记录 ───────────────────────────────────────────────────────
+function renderReleases(releases) {
+  const L = [
+    '---',
+    'title: 版本记录',
+    '---',
+    '',
+    '# 版本记录',
+    '',
+    '::: warning 本页由 ' + code('site/scripts/gen_reference_pages.mjs') + ' 从仓内 ' + code('CHANGELOG.md') + ' 投影生成，勿手改',
+    '版本 / 日期 / 主题投影自仓内 ' + code('CHANGELOG.md') + '（该文件由家族工具 ' + code('matrix-tools/scripts/gen_changelogs.py') + ' 从 git 历史生成）；',
+    '逐版完整变更看仓内 ' + code('CHANGELOG.md') + '。',
+    ':::',
+    '',
+    '| 版本 | 日期 | 主题 |',
+    '|---|---|---|',
+    ...releases.map(
+      (r) =>
+        '| ' + code(r.version) + ' | ' + cell(r.date) + ' | ' + cell(escAngles(r.subject || '（见 CHANGELOG）')) + ' |'
+    ),
+    '',
+    '> 完整变更：仓内 [CHANGELOG.md](' + GH_REPO + '/blob/main/CHANGELOG.md)。',
+    ''
+  ]
+  return L.join('\n')
+}
+// ── AI 直读入口：llms.txt（同样生成，数字不手抄）───────────────────────
+// 与 kernel / 矩阵站的 llms.txt 同一形态：给 AI 代理的紧凑事实页。
+function renderLlms(goMod, disk, readmePkgs, releases, adrs) {
+  const site = 'https://yi-nology.github.io/goagent-runtime'
+  const gh = GH_REPO
+  const readmeMap = new Map(readmePkgs.map((p) => [p.name, p.desc]))
+  const short = (s) => {
+    const cut = String(s || '').split(/[；。]/)[0]
+    return (cut.length > 60 ? cut.slice(0, 60) + '…' : cut).trim()
+  }
+  const kernel = goMod.requires.find((r) => r.module === KERNEL_MOD)
+  const prodFiles = disk.reduce((n, p) => n + p.prodFiles, 0)
+  const prodLines = disk.reduce((n, p) => n + p.prodLines, 0)
+  const direct = goMod.requires.filter((r) => !r.indirect).length
+  const indirect = goMod.requires.filter((r) => r.indirect).length
+  const L = [
+    '# goagent-runtime',
+    '',
+    '> goagent-kernel 的**运行时装配层**（Go library）：把 kernel 的确定性机制',
+    '> （状态 / 幂等 / 预算 / 恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。',
+    '> **判据不另写一套**——状态机 / 幂等闸 / 回合守卫 / 恢复 / 抢占接管全部来自 goagent-kernel，',
+    '> 本仓只做接线。',
+    '> 文档站: ' + site + '  |  GitHub: ' + gh,
+    '',
+    '> 本文件由 ' + code('site/scripts/gen_reference_pages.mjs') + ' 生成，数字取自 README / go.mod /',
+    '> Makefile / ci.yml / CHANGELOG.md / docs/adr，随构建刷新。',
+    '',
+    '## 判定口诀',
+    '',
+    '「这个判断，kernel 是不是已经判过了？」是 → 用 kernel 的判据，本仓只接线。',
+    '',
+    '## 四个必须先知道的约束',
+    '',
+    '1. **判据归 kernel，本仓只接线**：状态机 / 幂等闸 / 预算 / 恢复 / 抢占接管代次全在 kernel；新存储实现必须跑 kernel 的 sidetest 共享契约套件。',
+    '2. **模型接缝只有 ' + code('chat.Model') + ' 一个窄接口**：供应商中立，本仓不 import 任何具体 LLM SDK；适配在宿主侧。',
+    '3. **恢复出来的历史要么完整要么没有这一段**：半截历史 fail-closed 报错不猜；结果未知显式上抛 ' + code('res.Uncertain') + '，禁止盲目重试。',
+    '4. **cluster 的「接管不重复施加副作用」有前提**：靠宿主声明业务幂等键 ' + code('pipeline.Tool.IdempotencyKey') + '（如订单号）；未声明时跨副本这一步依赖模型给出稳定 tool_call_id。',
+    '',
+    '## AI 直读入口（同族）',
+    '- goagent-kernel（编排内核）: https://yi-nology.github.io/goagent-kernel/llms.txt',
+    '- oekit（基础库矩阵）: https://oekit.github.io/llms.txt',
+    '- oagentkit（Agent/LLM 编排工具链矩阵）: https://oagentkit.github.io/llms.txt',
+    '',
+    '## 文档（人读）',
+    '- 五分钟上手: ' + site + '/guide/quickstart.html',
+    '- 架构总览: ' + site + '/guide/architecture.html',
+    '- 核心概念: ' + site + '/guide/concepts.html',
+    '- 包导览: ' + site + '/packages/',
+    '- 模板选型（embedded / standalone / cluster）: ' + site + '/templates/',
+    '- 崩溃恢复语义: ' + site + '/advanced/recovery.html',
+    '- 坑速查（症状→真因→处置）: ' + site + '/reference/pitfalls.html',
+    '- 机器事实（包 × 依赖 × 能力）: ' + site + '/reference/packages.html',
+    '- 门禁体系: ' + site + '/reference/gates.html',
+    '- 决策记录（ADR，设计推导与取舍）: ' + site + '/reference/adr.md',
+    '- 版本记录: ' + site + '/reference/releases.html',
+    '- 完整仓内事实: ' + gh + '#readme',
+    '',
+    '## 事实快照',
+    '- 模块: ' + code(goMod.module) + ' · Go ' + code(goMod.go) + ' · MIT',
+    '- 能力包 ' + disk.length + ' 个（生产代码 ' + prodLines + ' 行 / ' + prodFiles + ' 个文件）',
+    '- kernel 地板版本: ' + code(kernel ? kernel.version : '未登记') + '；判据全部来自 kernel 契约面',
+    '- 第一方依赖 ' + direct + ' 个（直接）/ ' + indirect + ' 个（间接）',
+    '- 模板: ' + code('NewEmbedded') + '（内存）/ ' + code('NewStandalone') + '（SQLite 单文件）/ ' + code('cluster') + '（PG + worker 池，多副本）',
+    '- 已发布版本 ' + releases.length + ' 个，最新 ' + code(releases[0].version) + '；决策记录 ' + adrs.length + ' 篇',
+    '',
+    '## 包一览（' + disk.length + '）',
+    ...disk.map((p) => '- ' + code(p.name) + ' — ' + short(readmeMap.get(p.name) || p.doc)),
+    ''
+  ]
+  return L.join('\n')
+}
+// ── 自测：解析判据的反向验证 ────────────────────────────────────────────
+//
+// 为什么要有这个：生成器产出的每个数字都进到站点的「机器事实」页，而
+// **解析失效的失败形态是静默的**——某条内容没被解析到时，页面只是少一行，
+// 读起来完全正常，没有任何东西会红。这正是本仓反复说的那类病：判据变绿。
+//
+// 做法：直接调用**本文件里真正在跑的解析函数**（不复制实现——副本与实现一漂移，
+// 用例就退化成「看着在、其实没判」），喂构造输入，断言「该红的时候必须红」。
+function selftestParse() {
+  selftestMode = true
+  const results = []
+  const ok = (name, cond) => results.push({ name, ok: !!cond })
+  const mustFail = (name, fn) => {
+    try {
+      fn()
+      ok(name, false)
+    } catch (err) {
+      ok(name, String(err && err.message).indexOf('SELFTEST_FAIL') >= 0)
+    }
+  }
+
+  // ① ci.yml：jobs 段整体改缩进 ⇒ 解析器认不出作业、校验器数得出 ⇒ 必须红
+  // （这条是「校验器与解析器不同源」的证据：两者同源时，漂移会一起变绿）
+  const realCi = readRepo('.github/workflows/ci.yml')
+  mustFail('ci.yml jobs 段改缩进必须判红（少一条作业的清单读起来完全正常）', () =>
+    loadCiJobs(realCi.replace(/^ {2}([\w-]+):/gm, '    $1:'))
+  )
+  mustFail('ci.yml 缺 jobs 段必须判红', () => loadCiJobs('name: ci\n'))
+
+  // ② go.mod：解析不到 module 指令 ⇒ 必须红
+  mustFail('go.mod 缺 module 指令必须判红', () => loadGoMod('go 1.27.4\n'))
+
+  // ③ README：包表段改名 ⇒ 必须红（解析失效会静默生成空表）
+  mustFail('README 缺「## 包」段必须判红', () => loadReadmePackages('# 没有包表\n'))
+
+  // ④ Makefile：解析不出目标 ⇒ 必须红
+  mustFail('Makefile 无目标必须判红', () => loadMakeTargets('# 只有注释\n'))
+
+  // ⑤ ADR：缺「一句话结论」/「状态」⇒ 必须红
+  mustFail('ADR 缺「一句话结论」必须判红', () =>
+    parseAdr('# ADR-0009 · 样例\n\n| 项 | 内容 |\n|---|---|\n| **状态** | 已采纳 |\n', 'x.md')
+  )
+  mustFail('ADR 缺「状态」行必须判红', () =>
+    parseAdr('# ADR-0009 · 样例\n\n> **一句话结论**：结论\n', 'x.md')
+  )
+
+  // ⑥ CHANGELOG：段头格式变了 ⇒ 必须红
+  mustFail('CHANGELOG 解析不出版本段必须判红', () => loadReleases('# 没有版本段\n'))
+
+  // ⑦ 坑表：kernel 地板版本与 go.mod 对不上 ⇒ 必须红
+  const goMod = loadGoMod(readRepo('go.mod'))
+  mustFail('坑表 kernel 地板漂移必须判红', () =>
+    renderPitfalls(
+      { kernelFloor: 'v0.99.0', sections: [{ heading: 'x', rows: [{ symptom: 'a', cause: 'b', fix: 'c' }] }] },
+      goMod
+    )
+  )
+
+  // ⑧ 正向：真实仓内文件必须解析得出非空结果（防止「全都判红」也算通过）
+  const adrs = loadAdrs()
+  const releases = loadReleases(readRepo('CHANGELOG.md'))
+  const jobs = loadCiJobs(realCi)
+  ok('真实 ADR 至少一篇', adrs.length >= 1)
+  ok('真实 CHANGELOG 至少一个版本段', releases.length >= 1)
+  ok('真实 ci.yml 至少一个作业', jobs.length >= 1)
+  ok('真实 ADR 都带一句话结论与状态', adrs.every((a) => a.summary && a.status))
+
+  selftestMode = false
+  const bad = results.filter((r) => !r.ok)
+  for (const r of results) console.log((r.ok ? '  ✅ ' : '  ❌ ') + r.name)
+  if (bad.length) {
+    console.error('gen_reference_pages.mjs: 自测有 ' + bad.length + ' 项未通过')
+    process.exit(1)
+  }
+  console.log('自测通过：' + results.length + ' 项（含「该红的时候必须红」的负向用例）')
+}
+
 // ── 主流程 ──────────────────────────────────────────────────────────────
 function main() {
   const check = process.argv.includes('--check')
+  if (process.argv.includes('--selftest')) return selftestParse()
+
   const goMod = loadGoMod(readRepo('go.mod'))
   const disk = listDiskPackages(goMod)
   const readmePkgs = loadReadmePackages(readRepo('README.md'))
   const targets = loadMakeTargets(readRepo('Makefile'))
   const jobs = loadCiJobs(readRepo('.github/workflows/ci.yml'))
   const data = JSON.parse(read(DATA))
+  const adrs = loadAdrs()
+  const releases = loadReleases(readRepo('CHANGELOG.md'))
 
   const expected = new Map()
   expected.set(join(OUT, 'packages.md'), renderPackages(goMod, disk, readmePkgs))
   expected.set(join(OUT, 'gates.md'), renderGates(goMod, jobs, targets))
   expected.set(join(OUT, 'pitfalls.md'), renderPitfalls(data, goMod))
+  expected.set(join(OUT, 'adr.md'), renderAdrIndex(adrs))
+  expected.set(join(OUT, 'releases.md'), renderReleases(releases))
+  // 侧栏清单交给配置去读：页数会变，清单必须由生成物给出，
+  // 否则每加一篇 ADR 都要手改一次配置（而手改的那次没人会记得）。
+  expected.set(
+    MANIFEST,
+    JSON.stringify(adrs.map((a) => ({ file: a.file, id: a.id, title: a.title })), null, 2) + '\n'
+  )
+  for (const a of adrs) expected.set(join(ADR_OUT, a.file), renderAdrPage(a))
+  expected.set(join(PUBLIC, 'llms.txt'), renderLlms(goMod, disk, readmePkgs, releases, adrs))
 
   if (check) {
     const stale = []
@@ -536,11 +842,11 @@ function main() {
       if (!existsSync(p) || read(p) !== content) stale.push(p)
     }
     if (stale.length) {
-      console.error('以下页面与仓库事实不同步，请跑 npm run gen:reference：')
+      console.error('以下产物与仓库事实不同步，请跑 npm run gen:reference：')
       for (const p of stale) console.error('  - ' + p)
       process.exit(1)
     }
-    console.log('OK：' + expected.size + ' 个生成页与仓库事实同步')
+    console.log('OK：' + expected.size + ' 个生成产物与仓库事实同步')
     return
   }
 

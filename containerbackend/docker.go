@@ -6,7 +6,7 @@
 // # 为什么它是示例而不是内核包
 //
 // 内核 `backend` 只给契约与判据；把某个容器引擎的接法写进内核，等于把一种
-// 部署形态焊进内核依赖面。本目录与 examples/pgstore 的分工同构：
+// 部署形态焊进内核依赖面。本目录与 pgstore 的分工同构：
 // **宿主抄它，不 import 它**。两份实现：
 //
 //   - Docker（docker.go）：逐字实现 `backend.Backend`，走 Docker Engine

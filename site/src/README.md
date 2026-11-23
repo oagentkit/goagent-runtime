@@ -37,7 +37,7 @@ features:
   <a class="chip" href="/goagent-runtime/packages/">包导览</a>
   <a class="chip" href="/goagent-runtime/templates/">模板选型</a>
   <a class="chip" href="/goagent-runtime/advanced/recovery.html">崩溃恢复</a>
-  <a class="chip chip-ai" href="https://yi-nology.github.io/goagent-kernel/llms.txt">AI 直读 llms.txt</a>
+  <a class="chip chip-ai" href="https://yi-nology.github.io/goagent-runtime/llms.txt">AI 直读 llms.txt</a>
   <a class="chip" href="https://github.com/yi-nology/goagent-runtime">GitHub &#8599;</a>
 </div>
 
