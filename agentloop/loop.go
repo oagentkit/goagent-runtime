@@ -2,10 +2,10 @@
 //
 // # 它把哪些机制件串成一条链
 //
-//   chat.Model（供应商中立）⇄ 本循环 ⇄ pipeline（副作用施加）
-//   每回合/每工具后 checkpoint 落快照（中断后从存储恢复，不重放副作用）
-//   回合前 roundguard 判额度（预算用尽按策略强制收尾或停止）
-//   全程经 Emitter 出事件（embedded 广播 / standalone 落库）
+//	chat.Model（供应商中立）⇄ 本循环 ⇄ pipeline（副作用施加）
+//	每回合/每工具后 checkpoint 落快照（中断后从存储恢复，不重放副作用）
+//	回合前 roundguard 判额度（预算用尽按策略强制收尾或停止）
+//	全程经 Emitter 出事件（embedded 广播 / standalone 落库）
 //
 // # 恢复语义（本包的要点）
 //
@@ -51,6 +51,7 @@ const defaultForceFinalPrompt = "预算已用尽：请基于已有信息立即�
 // 事件类型词表（eventbus typ 字段取值）。
 const (
 	EventRoundStart   = "agent.round_start"
+	EventContentDelta = "agent.content_delta"
 	EventToolCall     = "agent.tool_call"
 	EventRoundEnd     = "agent.round_end"
 	EventSessionState = "agent.session_status"
@@ -206,10 +207,19 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 			}
 		}
 
-		resp, err := l.cfg.Model.Chat(ctx, chat.ChatRequest{
+		req := chat.ChatRequest{
 			Messages: append([]chat.Message(nil), messages...),
 			Tools:    l.cfg.Tools.Specs(),
-		})
+		}
+		// 流式旁路：模型支持时逐片回调 → content_delta 事件（Emitter 缺省
+		// 即不挂——无观测面时零开销，非流式实现亦不受影响）。
+		if l.cfg.Emitter != nil {
+			req.OnDelta = func(d chat.Delta) {
+				l.emit(ctx, res, sessionID, EventContentDelta,
+					map[string]any{"kind": d.Kind, "text": d.Text})
+			}
+		}
+		resp, err := l.cfg.Model.Chat(ctx, req)
 		if err != nil {
 			// ctx 取消/超时上抛：快照已持久化，下次同 sessionID 再 Run 即恢复。
 			return res, errors.Wrap(err, "模型调用失败", "session", sessionID)
@@ -252,46 +262,46 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				stopped = true
 				break
 			}
-				if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
-					res.Status = contract.StatusTimedOut
-					stopped = true
-					break
+			if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
+				res.Status = contract.StatusTimedOut
+				stopped = true
+				break
+			}
+			// 执行前人工审批闸（issue #4）：只闸声明了 NeedsApproval 的工具。
+			if l.cfg.ApprovalGate != nil && l.cfg.Tools.NeedsApproval(call.Name) {
+				decision, err := l.cfg.ApprovalGate(ctx, sessionID, call)
+				if err != nil {
+					// fail-closed：闸失败=无法证明获准，副作用不施加。
+					return res, errors.Wrap(err, "审批闸失败", "session", sessionID, "tool", call.Name)
 				}
-				// 执行前人工审批闸（issue #4）：只闸声明了 NeedsApproval 的工具。
-				if l.cfg.ApprovalGate != nil && l.cfg.Tools.NeedsApproval(call.Name) {
-					decision, err := l.cfg.ApprovalGate(ctx, sessionID, call)
-					if err != nil {
-						// fail-closed：闸失败=无法证明获准，副作用不施加。
-						return res, errors.Wrap(err, "审批闸失败", "session", sessionID, "tool", call.Name)
+				switch decision {
+				case ApprovalApprove:
+					// 批准：直通执行。
+				case ApprovalDeny:
+					// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
+					messages = append(messages, chat.Message{
+						Role:       chat.RoleTool,
+						Content:    denyObservation,
+						ToolCallID: call.ID,
+					})
+					done = append(done, call.ID)
+					l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+						"call_id": call.ID, "tool": call.Name, "outcome": "approval_denied",
+					})
+					continue
+				default:
+					// 挂起（ApprovalSuspend；未知决策值同义——保守挂起）：
+					// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
+					res.Status = StatusAwaitingApproval
+					res.PendingCallID = call.ID
+					if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
+						return res, err
 					}
-					switch decision {
-					case ApprovalApprove:
-						// 批准：直通执行。
-					case ApprovalDeny:
-						// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
-						messages = append(messages, chat.Message{
-							Role:       chat.RoleTool,
-							Content:    denyObservation,
-							ToolCallID: call.ID,
-						})
-						done = append(done, call.ID)
-						l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
-							"call_id": call.ID, "tool": call.Name, "outcome": "approval_denied",
-						})
-						continue
-					default:
-						// 挂起（ApprovalSuspend；未知决策值同义——保守挂起）：
-						// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
-						res.Status = StatusAwaitingApproval
-						res.PendingCallID = call.ID
-						if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
-							return res, err
-						}
-						l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
-						return res, nil
-					}
+					l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
+					return res, nil
 				}
-				out := l.cfg.Tools.Execute(ctx, sessionID, call)
+			}
+			out := l.cfg.Tools.Execute(ctx, sessionID, call)
 			used.ToolCalls++
 			used.Tools[call.Name]++
 			res.ToolCalls = used.ToolCalls
