@@ -2,6 +2,29 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.5.1] — 2026-11-23
+
+### 新增(adjudicate)：逐项观测钩子 Observer + ErrNotUncertain 并发分类
+
+* feat(adjudicate): 逐项观测钩子 Observer + ErrNotUncertain 并发分类（#1 增强，宿主收编前置）
+提出方 argus 收编 effect.Reconciler 的两处前置（oekit 侧对等语义已实证）：
+- WithObserver：每项结算后同步回调 Observation{Item,Event,Resolution,
+  Outcome,Err}——宿主接自己的 obs/日志面（观测分布/告警/结构化日志），Loop
+  保持零日志零指标纯库纪律。事件词表 settled/skipped/deferred/failed。
+- ErrNotUncertain → Skipped 分类（不进错误面）：并发对账时另一对账者/人工
+  先落结论不是故障——否则每个可重试 Key 每周期刷失败告警（argus 生产实证
+  语义，v0.5.0 漏搬）。观测面带 sentinel 可辨。
+- ReconcileOnce 项间 ctx 取消检查：中止并返回 ctx 错误（已结算 Stats 保留）。
+测试 +3：observer 三事件面（settled 带 Resolution/Outcome、skipped Err=nil、
+deferred 带错）/ErrNotUncertain 计 skipped 且零错误返回/ctx 取消中止。
+* docs(changelog): 补 v0.5.0 版本段（tag 已打，生成器对账缺段）
+* feat(adjudicate): WithGrace 接受显式 0（即时对账/测试形态，负值仍忽略）+测试
+* docs(site): 生成页追平 adjudicate Observer 增强后的生产行数
+
+### 重构(agentloop)：StatusAwaitingApproval 对齐 kernel contract 既有词表（StatusWaitingApproval=waiting_approval Open 态，同义异名统一）
+
+- 646fff2
+
 ## [v0.5.0] — 2026-11-23
 
 ### 新增(adjudicate)：副作用未知态周期裁决框架（#1）
