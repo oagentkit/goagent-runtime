@@ -16,7 +16,6 @@ import (
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/observe"
 	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/pgstore"
 )
 
 // executor 一个执行工位：独占一个 agentloop.Loop（同一 Loop 的 Run 不得并发）。
@@ -46,13 +45,17 @@ func (c *Cluster) Start(ctx context.Context) error {
 	}
 	for i := 0; i < c.cfg.Workers; i++ {
 		// 每 worker 一个 Loop：Loop 的快照序号是进程内单调游标，共用即串扰。
+		// Joint=c.store ⇒ 事件随快照单事务落 PG（issue #9：孤儿事件/终态事件
+		// 丢失的崩溃窗口结构闭合）。Emitter 不设：pgEmitter 的落库职责由联合
+		// 提交承担，本副本不广播——Observer 的事件流走 forwardEvents 从 PG
+		// 事件面统一转发（Joint 提交后事件已在 PG，转发语义不变）。
 		loop, err := agentloop.New(agentloop.Config{
-			Model:   c.cfg.Model,
-			Tools:   pipe,
-			Store:   c.store.Snapshots(),
-			Emitter: pgEmitter{store: c.events},
-			Budget:  c.cfg.Budget,
-			System:  c.cfg.System,
+			Model:  c.cfg.Model,
+			Tools:  pipe,
+			Store:  c.store.Snapshots(),
+			Joint:  c.store,
+			Budget: c.cfg.Budget,
+			System: c.cfg.System,
 		})
 		if err != nil {
 			cancel()
@@ -193,24 +196,6 @@ func (c *Cluster) forwardEvents(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// pgEmitter 把事件写进 PG 事件面（**不广播**——广播由 forwardEvents 统一做，
-// 否则本地会收到两份：一份直接广播，一份从事件面读回来）。
-type pgEmitter struct{ store *pgstore.EventStore }
-
-// Publish 落库一条事件。
-func (e pgEmitter) Publish(ctx context.Context, sessionID, caseID string, stepID *uint64, typ, level string, payload map[string]any) error {
-	_, err := e.store.Insert(ctx, eventbus.Event{
-		SessionID:  sessionID,
-		CaseID:     caseID,
-		StepID:     stepID,
-		Type:       typ,
-		Level:      level,
-		Payload:    payload,
-		OccurredAt: time.Now(),
-	})
-	return err
 }
 
 // sleepCtx 睡一段；ctx 取消返回 false（调用方据此退出）。
