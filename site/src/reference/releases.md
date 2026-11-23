@@ -11,6 +11,7 @@ title: 版本记录
 
 | 版本 | 日期 | 主题 |
 |---|---|---|
+| `v0.6.0` | 2026-11-23 | 新增(chat)：流式增量回调 OnDelta + agentloop content_delta 事件 |
 | `v0.5.1` | 2026-11-23 | 新增(adjudicate)：逐项观测钩子 Observer + ErrNotUncertain 并发分类 |
 | `v0.5.0` | 2026-11-23 | 新增(adjudicate)：副作用未知态周期裁决框架（#1） |
 | `v0.4.2` | 2026-11-23 | 格式(site)：架构图按 goagent-kernel 站视觉口径重绘（分层卡片 + 单向箭头 + 图注） |

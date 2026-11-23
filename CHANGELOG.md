@@ -2,6 +2,19 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.0] — 2026-11-23
+
+### 新增(chat)：流式增量回调 OnDelta + agentloop content_delta 事件
+
+- chat：Delta{Kind,Text} + 词表 DeltaKindText/Reasoning + ChatRequest.OnDelta
+  （可选回调；非流式实现可不调，nil 语义同缺省，响应语义不变）
+- agentloop：EventContentDelta="agent.content_delta"；drive 在 Emitter 非 nil
+  时挂 OnDelta 逐片发事件（kind/text 原样、保序），无观测面零开销
+- 测试：有观测面逐片断言（含 reasoning kind）+ 无观测面不挂回调
+- 顺带 gofmt 修 main 既有漂移（文件头注释缩进 + 工具回合块缩进）
+- 站点生成页随 API 追平（packages.md/llms.txt）
+* docs(changelog): 补 v0.5.1 版本段（tag 已打，生成器对账缺段）+ 站点 releases 追平
+
 ## [v0.5.1] — 2026-11-23
 
 ### 新增(adjudicate)：逐项观测钩子 Observer + ErrNotUncertain 并发分类
