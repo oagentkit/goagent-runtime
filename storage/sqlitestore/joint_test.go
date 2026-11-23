@@ -120,6 +120,36 @@ func TestJointCommitAtomicOnFailure(t *testing.T) {
 	}
 }
 
+// TestJointCommitAtomicOnEventFailure 反向原子性（#9 判据②的另一半）：
+// 事件面写失败 ⇒ 快照行**不落**（无孤儿快照）——「同生共死」的另一半。
+//
+// 注入手段：payload 里放一个不可序列化的值（函数）⇒ 事件序列化必失败。
+func TestJointCommitAtomicOnEventFailure(t *testing.T) {
+	ctx := context.Background()
+	sq, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "joint-rev.db"))
+	if err != nil {
+		t.Fatalf("开库失败: %v", err)
+	}
+	defer func() { _ = sq.Close() }()
+
+	bad := eventbus.Event{
+		SessionID: "sess-rev", Type: "x", Level: "info",
+		Payload:    map[string]any{"bad": func() {}}, // 不可序列化 ⇒ 写事件必失败
+		OccurredAt: time.Now(),
+	}
+	if err := sq.CommitWithEvents(ctx, snapshotAtSeq(1, "sess-rev"), []eventbus.Event{bad}); err == nil {
+		t.Fatal("事件面写失败时联合提交必须报错")
+	}
+
+	// 快照行不落（无孤儿快照）。
+	if snap, err := sq.Checkpoints().Load(ctx, "sess-rev"); err == nil {
+		t.Fatalf("事件面失败后快照行必须不落，got seq=%d", snap.Seq)
+	}
+	if evs := listEvents(t, sq.Events()); len(evs) != 0 {
+		t.Fatalf("事件行也必须零落，got %d", len(evs))
+	}
+}
+
 // eventLister 事件列举面。kernel 的 eventbus.Store 契约**只保证 Insert**——
 // 列举是参考实现面的能力（两脸同库的形态才谈得上「这批事件落了几行」）。
 // 故按能力断言取用，不扩 kernel 契约。

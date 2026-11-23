@@ -15,6 +15,7 @@ import (
 	"github.com/yi-nology/goagent-kernel/sideeffect"
 	"github.com/yi-nology/goagent-kernel/taskboard"
 
+	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/cluster"
 	"github.com/yi-nology/goagent-runtime/pipeline"
@@ -136,8 +137,8 @@ func TestClusterRunEndToEnd(t *testing.T) {
 
 	var applied atomic.Int64
 	c, err := cluster.New(ctx, cluster.Config{
-		Model:  &fakeModel{errAt: -1, toolName: "计数器", final: "共 1 次"},
-		Tools:  []pipeline.Tool{countingTool("计数器", &applied)},
+		Model:   &fakeModel{errAt: -1, toolName: "计数器", final: "共 1 次"},
+		Tools:   []pipeline.Tool{countingTool("计数器", &applied)},
 		Workers: 2,
 		Schema:  schema,
 	}, dsn)
@@ -161,6 +162,68 @@ func TestClusterRunEndToEnd(t *testing.T) {
 	}
 	if got := applied.Load(); got != 1 {
 		t.Fatalf("工具施加次数不对：got=%d want=1", got)
+	}
+}
+
+// TestClusterJointCommitEventsEndToEnd cluster 形态的**联合提交**判据
+// （issue #9 的验收判据②在 PG 侧的空白）：
+//
+// 一轮（两轮：请求工具 + 终答）产生的事件随快照**单事务**落 PG——
+// 一轮四事件：2×round_start + tool_call + session_state。
+//
+// 为什么必须有这条：此前「一轮四事件」只在 SQLite 形态有断言
+// （storage/sqlitestore/joint_test.go），PG 侧空白 ⇒ cluster 走联合提交
+// 这条路径**无任何断言保护**：哪天联合提交静默落回两步路径，
+// 事件与快照就不再同生共死，而没有任何用例会红。
+//
+// 计数口径：只数 loop 自己的事件类型（agent.*）；cluster 自己的
+// session.result 是**独立 Insert**（不在联合事务内，见 ADR-0008）。
+func TestClusterJointCommitEventsEndToEnd(t *testing.T) {
+	dsn := requireDSN(t)
+	schema := testSchema(t, dsn)
+	ctx := context.Background()
+
+	var applied atomic.Int64
+	c, err := cluster.New(ctx, cluster.Config{
+		Model:   &fakeModel{errAt: -1, toolName: "计数器", final: "共 1 次"},
+		Tools:   []pipeline.Tool{countingTool("计数器", &applied)},
+		Workers: 2,
+		Schema:  schema,
+	}, dsn)
+	if err != nil {
+		t.Fatalf("装配 cluster 失败: %v", err)
+	}
+	defer c.Close()
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("启动 worker 池失败: %v", err)
+	}
+
+	const sess = "sess-joint-events"
+	if _, err := c.Run(ctx, sess, "数一下"); err != nil {
+		t.Fatalf("cluster.Run 失败: %v", err)
+	}
+
+	events, err := c.Events().ListAfter(ctx, 0, 100)
+	if err != nil {
+		t.Fatalf("读事件失败: %v", err)
+	}
+	roundStart, toolCall, sessionState := 0, 0, 0
+	for _, ev := range events {
+		if ev.SessionID != sess {
+			continue
+		}
+		switch ev.Type {
+		case agentloop.EventRoundStart:
+			roundStart++
+		case agentloop.EventToolCall:
+			toolCall++
+		case agentloop.EventSessionState:
+			sessionState++
+		}
+	}
+	if roundStart != 2 || toolCall != 1 || sessionState != 1 {
+		t.Fatalf("一轮四事件（2×round_start + tool_call + session_state）不对："+
+			"got round_start=%d tool_call=%d session_state=%d", roundStart, toolCall, sessionState)
 	}
 }
 

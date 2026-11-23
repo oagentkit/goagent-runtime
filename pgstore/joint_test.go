@@ -13,7 +13,6 @@ import (
 
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/eventbus"
-
 )
 
 // TestCommitWithEventsEndToEnd 快照+事件一批落库、同读可见。
@@ -58,6 +57,55 @@ func TestCommitWithEventsEndToEnd(t *testing.T) {
 	}
 	if len(events) != 2 {
 		t.Fatalf("应落 2 事件行，got %d", len(events))
+	}
+}
+
+// TestCommitWithEventsAtomicOnEventFailure 反向原子性（#9 判据②的另一半）：
+// 事件面写失败 ⇒ 快照行**不落**（无孤儿快照）。
+//
+// 注入手段：payload 里放一个不可序列化的值（函数）⇒ 事件序列化必失败
+// （PG 侧是 JSONB，SQLite 侧是 TEXT，两边都会在写事件时炸）。
+// 断言：联合提交报错，且快照**读不出来**——快照与事件同生共死，
+// 一个都活不下来。
+func TestCommitWithEventsAtomicOnEventFailure(t *testing.T) {
+	dsn := requireDSN(t)
+	ctx := context.Background()
+	admin := basePool(t, dsn)
+	schema, err := NewSchema(ctx, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = DropSchema(ctx, admin, schema) })
+	if err := EnsureSchema(ctx, admin, schema); err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(schemaPool(t, dsn, schema))
+
+	bad := eventbus.Event{
+		SessionID: "sess-rev", Type: "x", Level: "info",
+		Payload:    map[string]any{"bad": func() {}}, // 不可序列化 ⇒ 写事件必失败
+		OccurredAt: time.Now(),
+	}
+	err = store.CommitWithEvents(ctx, checkpoint.Snapshot{
+		RunID:  "sess-rev",
+		Seq:    1,
+		Status: "running",
+		Fields: map[string]string{"history": "[]"},
+	}, []eventbus.Event{bad})
+	if err == nil {
+		t.Fatal("事件面写失败时联合提交必须报错")
+	}
+
+	// 快照行不落（无孤儿快照）——「同生共死」的另一半。
+	if snap, err := store.Snapshots().Load(ctx, "sess-rev"); err == nil {
+		t.Fatalf("事件面失败后快照行必须不落，got seq=%d", snap.Seq)
+	}
+	events, err := store.Events().ListAfter(ctx, 0, 10)
+	if err != nil {
+		t.Fatalf("读事件失败: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("事件行也必须零落，got %d", len(events))
 	}
 }
 
