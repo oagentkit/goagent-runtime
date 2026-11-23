@@ -67,6 +67,18 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 
 `chat.Model` 是供应商中立窄接口——任何模型 SDK 包一层适配即可接入，本仓不 import 任何具体供应商。
 
+## 流式模型（保 SSE 逐片体验）
+
+`chat.Model` 仍是**单方法非流式契约**（`Chat(ctx, ChatRequest) (ChatResponse, error)`）——老宿主零改动。但保流式的宿主不必再各写一座「Stream 聚合桥」：
+
+- **承载面**：`chat.Delta` 带 kind + text，可选带 `ToolCall`（`Index` 分组键 + 参数片段）与 `Usage`（token 计量）。
+- **归并器**：`chat.DeltaAggregator` 按 `Index` 归并工具调用、累计 usage——**归并规则在框架侧一份实现**（宿主不再各写各的）。宿主侧只剩「把 SDK 的 chunk 搬成片段」与 EOF/错误上抛。
+- **旁路**：`ChatRequest.OnDelta` 是可选回调，模型不调用即回落非流式（nil 语义同缺省）。
+- **事件面**：逐片出 `agent.content_delta`。联合提交形态（standalone / cluster）下**只即时广播、不落事件行**——增量是观测面不是状态面，落库会污染状态面并打破「一轮四事件」那条判据。
+- **背压**：广播非阻塞（订阅方缓冲满则丢弃并计数）⇒ 宿主 SSE 写慢不反压模型流。
+
+形态取舍与推导见 [ADR-0009](docs/adr/ADR-0009-流式接缝走-push-回调加框架归并器.md)。
+
 ## 恢复语义（本层的要点）
 
 - 会话历史整体落 checkpoint 快照；进程死在任意两个提交点之间，恢复出来的历史**要么完整要么没有这一段**（回填与提交在同一段顺序代码里）。

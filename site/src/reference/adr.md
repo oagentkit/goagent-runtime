@@ -17,5 +17,7 @@ title: 决策记录（ADR）
 | [ADR-0005](/goagent-runtime/adr/ADR-0005-cluster-不重复施加靠业务幂等键.html) | cluster 的不重复施加靠业务幂等键 | 「接管不重复施加副作用」的前提是宿主声明业务幂等键——这是结构性保证，不靠模型复述同一个 ID。 | 已采纳（Accepted） |
 | [ADR-0006](/goagent-runtime/adr/ADR-0006-容器后端是参考实现.html) | 容器后端是参考实现 | 容器后端是参考实现——宿主抄它不 import 它，部署形态不焊进依赖面。 | 已采纳（Accepted） |
 | [ADR-0007](/goagent-runtime/adr/ADR-0007-驱动绑定归绑定包.html) | 驱动绑定归绑定包 | 驱动绑定归绑定包——判据面（`storage`）零驱动边，绑定面（`storage/sqlitestore`）才带驱动，宿主按面 import。 | 已采纳（Accepted） |
+| [ADR-0008](/goagent-runtime/adr/ADR-0008-事件与快照同生共死.html) | 事件与快照同生共死 | 事件与快照同生共死——两脸同库时单事务联合提交，孤儿事件与终态丢失两个窗口结构闭合。 | 已采纳（Accepted） |
+| [ADR-0009](/goagent-runtime/adr/ADR-0009-流式接缝走-push-回调加框架归并器.html) | 流式接缝走 push 回调 + 框架归并器 | 流式接缝走 push 回调 + 框架归并器——宿主只产片段，归并规则归框架一份，增量是观测面不进状态面。 | 已采纳（Accepted） |
 
 > 仓内索引：https://github.com/yi-nology/goagent-runtime/blob/main/docs/adr/README.md（新增 ADR 的流程写在那里）。

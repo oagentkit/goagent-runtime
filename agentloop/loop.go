@@ -211,12 +211,18 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 			Messages: append([]chat.Message(nil), messages...),
 			Tools:    l.cfg.Tools.Specs(),
 		}
-		// 流式旁路：模型支持时逐片回调 → content_delta 事件（Emitter 缺省
-		// 即不挂——无观测面时零开销，非流式实现亦不受影响）。
-		if l.cfg.Emitter != nil {
+		// 流式旁路：模型支持时逐片回调 → content_delta 事件。
+		//
+		// 挂载条件：**有观测面**（Emitter 非 nil）**或**有联合提交面（Joint
+		// 非 nil）——后者此前不挂 ⇒ 事件随快照落库的形态（standalone / cluster）
+		// 里流式增量静默消失（issue #11 的遗留缺口）。
+		//
+		// 载荷：kind/text 原样透传（保序）；带工具调用片段或计量片段时一并
+		// 带上结构化字段——观测面要**原样**（不归并：归并是响应面的事，
+		// 规则见 chat.DeltaAggregator）。
+		if l.cfg.Emitter != nil || l.cfg.Joint != nil {
 			req.OnDelta = func(d chat.Delta) {
-				l.emit(ctx, res, sessionID, EventContentDelta,
-					map[string]any{"kind": d.Kind, "text": d.Text})
+				l.emitDelta(ctx, res, sessionID, deltaPayload(d))
 			}
 		}
 		resp, err := l.cfg.Model.Chat(ctx, req)
@@ -371,9 +377,13 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.S
 // 回灌——不回灌则本次 Seq=1 会被「已持久化序号 >= 本次」拒收。
 //
 // Joint 模式分派（issue #2 主体）：事件行随快照单事务落库（同生共死——
-// 联合提交失败整批回滚，pendings 保留待下轮重试）；提交成功后统一广播
-// （进程内广播 fire-and-forget 无失败语义，数据已原子）。旧路径=先落
-// 快照，事件由 emit 即时发（向后兼容）。
+// 联合提交失败整批回滚）；提交成功后统一广播（进程内广播 fire-and-forget
+// 无失败语义，数据已原子）。旧路径=先落快照，事件由 emit 即时发（向后兼容）。
+//
+// ★ **联合提交失败时本批事件作废，不保留待下轮重试**：重试的形态是
+// 「重跑该回合」，新一轮会重新产生事件；把上一批挂在 pendings 里等下一轮
+// 提交，等于把两轮的事件混进同一笔快照。失败即整批作废（数据面已回滚，
+// 事件面随之为空——同生共死）。
 func (l *Loop) commit(ctx context.Context, res *Result, sessionID string, messages []chat.Message, done []string, status string) error {
 	raw, err := json.Marshal(messages)
 	if err != nil {
@@ -472,6 +482,8 @@ func (l *Loop) forceFinalPrompt() string {
 // 非 Joint：即时发（Emitter nil+Bus=内置纯广播；Emitter=持久化+广播）。
 // 发射失败不再静默吞（issue #2 可观测面）：计数 Result.EmitFailed +
 // OnEmitError 回调。
+//
+// ★ **流式增量不走这条路径**（见 emitDelta）：增量是观测面不是状态面。
 func (l *Loop) emit(ctx context.Context, res *Result, sessionID, typ string, payload map[string]any) {
 	if l.cfg.Emitter == nil && l.cfg.Joint == nil {
 		return
@@ -484,6 +496,60 @@ func (l *Loop) emit(ctx context.Context, res *Result, sessionID, typ string, pay
 		return
 	}
 	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload); err != nil {
+		res.EmitFailed++
+		if l.cfg.OnEmitError != nil {
+			l.cfg.OnEmitError(err)
+		}
+	}
+}
+
+// deltaPayload 把一片流式增量摊成事件载荷：kind/text 原样，带工具调用
+// 片段或计量片段时一并带上结构化字段。
+func deltaPayload(d chat.Delta) map[string]any {
+	payload := map[string]any{"kind": d.Kind, "text": d.Text}
+	if d.ToolCall != nil {
+		payload["tool_call"] = map[string]any{
+			"index":     d.ToolCall.Index,
+			"id":        d.ToolCall.ID,
+			"name":      d.ToolCall.Name,
+			"arguments": d.ToolCall.Arguments,
+		}
+	}
+	if d.Usage != nil {
+		payload["usage"] = map[string]any{
+			"prompt_tokens":     d.Usage.PromptTokens,
+			"completion_tokens": d.Usage.CompletionTokens,
+			"total_tokens":      d.Usage.TotalTokens,
+		}
+	}
+	return payload
+}
+
+// emitDelta 流式增量：**只广播，不落事件行**。
+//
+// 为什么与其它事件分路：流式增量是**观测面**（瞬时碎片），不是状态面。
+// Joint 形态下事件面就是落库面（事件行 = 状态面的一行）——把碎片塞进去
+// 会污染状态面，也会打破「一轮四事件」那条判据（issue #9 的口径）。
+// 故 Joint 形态走总线**即时广播**（逐片体验），不进 pendings。
+//
+// 非 Joint 形态：与其它事件同路径（Emitter），宿主既有采集方式不变。
+//
+// 背压：总线广播是**非阻塞**的（订阅方缓冲满则丢弃并计数）⇒ 宿主 SSE 写慢
+// 不会反压模型流；片段因此可能丢——观测面允许丢，状态面不允许。
+func (l *Loop) emitDelta(ctx context.Context, res *Result, sessionID string, payload map[string]any) {
+	if l.cfg.Joint != nil {
+		if l.cfg.Bus != nil {
+			l.cfg.Bus.Broadcast(eventbus.Event{
+				SessionID: sessionID, Type: EventContentDelta,
+				Level: "info", Payload: payload, OccurredAt: time.Now(),
+			})
+		}
+		return
+	}
+	if l.cfg.Emitter == nil {
+		return
+	}
+	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, EventContentDelta, "info", payload); err != nil {
 		res.EmitFailed++
 		if l.cfg.OnEmitError != nil {
 			l.cfg.OnEmitError(err)

@@ -59,6 +59,19 @@ flowchart TB
 
 这套语义由 `agentloop` / `runtime` 的端到端用例钉住：测试断言「施加次数仍为 1」。
 
+## 流式旁路（content_delta）
+
+模型能产流式 chunk 时，loop 把 `ChatRequest.OnDelta` 挂上，逐片出 `agent.content_delta` 事件（kind/text 原样；带工具调用片段或计量时一并带上结构化字段）。
+
+```mermaid
+flowchart LR
+    M["模型逐片回调 OnDelta"] --> L["loop 逐片出 content_delta"]
+    L --> E1["非联合形态：走 Emitter（宿主既有采集方式不变）"]
+    L --> E2["联合形态：只即时广播，不落事件行"]
+```
+
+为什么联合形态下不落事件行：流式增量是**观测面**（瞬时碎片），不是状态面——事件行就是状态面的一行，把碎片塞进去会污染状态面，也会打破「一轮四事件」那条判据（状态面事件数与增量无关）。推导与边界见 [ADR-0009](/goagent-runtime/adr/ADR-0009-流式接缝走-push-回调加框架归并器.html)。
+
 ## 依赖
 
 ```mermaid

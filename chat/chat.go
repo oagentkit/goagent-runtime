@@ -54,18 +54,28 @@ type ToolSpec struct {
 }
 
 // Delta 流式增量（OnDelta 回调输入；模型支持流式时逐片调用）。
+//
+// 结构化片段（工具调用 / 计量）是**可选**字段：只吐文本的实现不必构造它们；
+// 归并规则见 stream.go 的 DeltaAggregator（框架与宿主共用同一份）。
 type Delta struct {
-	// Kind 增量种类："text" 正文 / "reasoning" 推理过程。词表开放——模型
-	// 不产某类即不回调，宿主按 Kind 分流即可。
+	// Kind 增量种类："text" 正文 / "reasoning" 推理过程 / "tool_call"
+	// 工具调用片段 / "usage" 计量。词表开放——模型不产某类即不回调，
+	// 宿主按 Kind 分流即可。
 	Kind string
 	// Text 本片增量文本（非累积）。
 	Text string
+	// ToolCall 工具调用片段（Kind=DeltaKindToolCall 时带；Text 留空）。
+	ToolCall *ToolCallFragment
+	// Usage 计量片段（Kind=DeltaKindUsage 时带）。
+	Usage *Usage
 }
 
 // 增量种类词表（Kind 取值；开放集，宿主可识别未知 Kind 透传）。
 const (
 	DeltaKindText      = "text"
 	DeltaKindReasoning = "reasoning"
+	DeltaKindToolCall  = "tool_call"
+	DeltaKindUsage     = "usage"
 )
 
 // ChatRequest 一次模型调用请求。
