@@ -1,0 +1,399 @@
+/* ── 视觉：与 goagent-kernel 站同一套（GitHub 风 + 蓝紫品牌）──────────────
+ * 两套配色板，亮/暗各一：亮色用 GitHub Light 的官方值，暗色用 kernel 站
+ * 迁站前旧站 style.css 的那一套（#0d1117 底 / #58a6ff 蓝 / #a371f7 紫渐变）。
+ *
+ * 为什么必须拆两套：亮色模式若没有自己的变量就会沿用深色值 ⇒ 浅色字压深色底，
+ * 可读性直接崩掉（这不是「不够好看」，是「读不了」）。
+ *
+ * 为什么与 kernel 站逐值对齐：站群三站（kernel / runtime / oagentkit 矩阵）
+ * 是同一套东西的三个切面，读者在三站之间来回跳 ⇒ 配色差一位就会被读成
+ * 「这是另一个站」。这里把 kernel 站的取值**原样搬过来**，而不是各自挑一套。
+ *
+ * 亮色取 GitHub Light 官方值：底 #ffffff / 交替 #f6f8fa / 文字 #1f2328 /
+ * #59636e / #818b98 / 描边 #d1d9e0 / #d8dee4。品牌蓝在亮色下压深一档
+ * （#0969da），否则浅底上的 #58a6ff 对比度不足。
+ */
+
+:root {
+  /* 品牌与强调 */
+  --vp-c-accent: #0969da;
+  --vp-c-accent-bg: #0969da;
+  --vp-c-accent-hover: #218bff;
+  --vp-c-accent-text: #ffffff;
+  --vp-c-accent-soft: rgb(9 105 218 / 14%);
+
+  /* 背景三层：底 / 交替 / 浮层 */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f6f8fa;
+  --vp-c-bg-elv: #ffffff;
+
+  /* 文字三级 */
+  --vp-c-text: #1f2328;
+  --vp-c-text-mute: #59636e;
+  --vp-c-text-subtle: #818b98;
+
+  /* 描边 */
+  --vp-c-divider: #d8dee4;
+  --vp-c-border: #d1d9e0;
+  --vp-c-border-hard: #b7c0ca;
+  --vp-c-shadow: rgb(31 35 40 / 12%);
+
+  /* 控件底 */
+  --vp-c-control: rgb(9 105 218 / 6%);
+  --vp-c-control-hover: rgb(9 105 218 / 12%);
+  --vp-c-control-disabled: #eaeef2;
+
+  /* 顶栏/侧栏底 */
+  --vp-navbar-c-bg: rgb(255 255 255 / 82%);
+  --vp-sidebar-c-bg: #f6f8fa;
+
+  /* 品牌辅色（亮色下用深一档的值：#58a6ff 在白底上对比度不足） */
+  --k-accent-2: #8250df;
+  --k-chip-ai: #8250df;
+  --k-hero-hi: #a371f7;
+  --k-shadow-card: rgb(31 35 40 / 14%);
+}
+
+[data-theme='dark'] {
+  /* 品牌与强调 */
+  --vp-c-accent: #58a6ff;
+  --vp-c-accent-bg: #58a6ff;
+  --vp-c-accent-hover: #79b8ff;
+  --vp-c-accent-text: #06121f;
+  --vp-c-accent-soft: rgb(88 166 255 / 14%);
+
+  /* 背景三层：底 / 交替 / 浮层 */
+  --vp-c-bg: #0d1117;
+  --vp-c-bg-alt: #11161f;
+  --vp-c-bg-elv: #161b26;
+
+  /* 文字三级 */
+  --vp-c-text: #e6edf3;
+  --vp-c-text-mute: #9aa7b8;
+  --vp-c-text-subtle: #6b7787;
+
+  /* 描边 */
+  --vp-c-divider: #1f2634;
+  --vp-c-border: #262e3d;
+  --vp-c-border-hard: #303b4d;
+  --vp-c-shadow: rgb(0 0 0 / 40%);
+
+  /* 控件底 */
+  --vp-c-control: rgb(88 166 255 / 8%);
+  --vp-c-control-hover: rgb(88 166 255 / 16%);
+  --vp-c-control-disabled: #1c2330;
+
+  /* 顶栏/侧栏底 */
+  --vp-navbar-c-bg: rgb(13 17 23 / 82%);
+  --vp-sidebar-c-bg: #11161f;
+
+  --k-accent-2: #a371f7;
+  --k-chip-ai: #c9a9ff;
+  --k-hero-hi: #d0b3ff;
+  --k-shadow-card: rgb(0 0 0 / 40%);
+}
+
+:root,
+[data-theme='dark'] {
+  --font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* 顶栏：毛玻璃 + 细底线 */
+.vp-nav,
+.vp-navbar {
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+/* 首页 hero：科技网格底 + 三层光晕 */
+.vp-hero {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 3%) 1px, transparent 1px),
+    radial-gradient(1000px 440px at 18% -12%, rgb(88 166 255 / 18%), transparent 62%),
+    radial-gradient(880px 400px at 86% -6%, rgb(163 113 247 / 16%), transparent 60%),
+    radial-gradient(700px 380px at 50% 122%, rgb(64 196 255 / 10%), transparent 65%);
+  background-size: 44px 44px, 44px 44px, auto, auto, auto;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+#main-title {
+  font-size: clamp(38px, 5.4vw, 66px);
+  letter-spacing: -0.02em;
+  background: linear-gradient(
+    100deg,
+    var(--vp-c-accent) 0%,
+    var(--k-accent-2) 28%,
+    var(--k-hero-hi) 44%,
+    var(--k-accent-2) 60%,
+    var(--vp-c-accent) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 70px rgb(88 166 255 / 22%);
+  animation: hero-rise 0.7s ease both, grad-flow 8s linear infinite;
+}
+
+@keyframes grad-flow {
+  to { background-position: 220% center; }
+}
+
+/* 入场动效：标题 → 标语 → 按钮 依次浮起 */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.vp-hero-description {
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  animation: hero-rise 0.7s 0.12s ease both;
+}
+
+.vp-hero-actions {
+  animation: hero-rise 0.7s 0.22s ease both;
+}
+
+/* hero 双光晕球：缓慢漂移（只动 transform，不引起重排） */
+.vp-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.vp-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.vp-hero::before,
+.vp-hero::after {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.vp-hero::before {
+  background: #2f6bff;
+  top: -180px;
+  left: -120px;
+  animation: float-a 14s ease-in-out infinite alternate;
+}
+
+.vp-hero::after {
+  background: #7a4dd8;
+  top: -220px;
+  right: -140px;
+  animation: float-b 18s ease-in-out infinite alternate;
+}
+
+@keyframes float-a {
+  to { transform: translate(120px, 60px) scale(1.15); }
+}
+
+@keyframes float-b {
+  to { transform: translate(-100px, 80px) scale(1.1); }
+}
+
+/* 特性卡：浮层面 + 描边 + 圆角，悬浮微升起 + 蓝光描边。
+ * 宽屏 3 列收紧纵向占用——文案已是短句，网格不能还按长文的 2 列摊。
+ * 主题的 .vp-features 是 flex（flex-basis:30% + place-content:stretch
+ * space-between）——一旦旧样式被缓存或 cascade 顺序变化，卡片会被甩到两侧、
+ * 中间裂开一条大空档。这里做**双保险**：容器强推 grid，子项同时按 flex
+ * 三分之一宽兜底（两种布局模型下都排成整齐等宽列），并用 !important 压过
+ * 主题同特异性规则。 */
+.vp-features {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 18px !important;
+  place-content: initial !important;
+  counter-reset: feat;
+}
+
+@media (max-width: 1023px) {
+  .vp-features { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@media (max-width: 639px) {
+  .vp-features { grid-template-columns: 1fr !important; }
+}
+
+.vp-feature {
+  flex: none !important;
+  width: auto !important;
+  max-width: none !important;
+  position: relative;
+  counter-increment: feat;
+  background: var(--vp-c-bg-elv);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 14px;
+  padding: 22px 22px 20px;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  animation: hero-rise 0.55s ease both;
+}
+
+.vp-feature:nth-child(2) { animation-delay: 0.07s; }
+.vp-feature:nth-child(3) { animation-delay: 0.14s; }
+.vp-feature:nth-child(4) { animation-delay: 0.21s; }
+.vp-feature:nth-child(5) { animation-delay: 0.28s; }
+.vp-feature:nth-child(6) { animation-delay: 0.35s; }
+
+/* 渐变编号 01–06：给卡片一个视觉锚点 */
+.vp-feature::before {
+  content: '0' counter(feat);
+  display: block;
+  margin-bottom: 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(96deg, var(--vp-c-accent), var(--k-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vp-feature h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.vp-feature p {
+  font-size: 13.5px;
+  line-height: 1.7;
+  margin-top: 8px;
+}
+
+.vp-feature:hover {
+  transform: translateY(-4px);
+  border-color: rgb(88 166 255 / 45%);
+  box-shadow: 0 14px 34px var(--k-shadow-card), 0 0 24px rgb(88 166 255 / 12%);
+}
+
+/* 按钮：主按钮渐变蓝底深字泛光，次按钮描边 */
+.vp-hero-action-button {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vp-hero-action-button.primary {
+  background: linear-gradient(135deg, #58a6ff, #6f8dff);
+  color: #06121f;
+}
+
+.vp-hero-action-button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgb(88 166 255 / 40%);
+}
+
+.vp-hero-action-button.secondary {
+  background: transparent;
+  border-color: var(--vp-c-border);
+  color: var(--vp-c-text);
+}
+
+.vp-hero-action-button.secondary:hover {
+  transform: translateY(-2px);
+}
+
+/* 首页压轴横幅（渐变描边）+ 安装条 + 导航胶囊 */
+.home-punch {
+  max-width: 880px;
+  margin: 36px auto 16px;
+  padding: 24px 30px;
+  text-align: center;
+  font-size: 1.15rem;
+  color: var(--vp-c-text-mute);
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--vp-c-bg-alt), var(--vp-c-bg-alt)) padding-box,
+    linear-gradient(96deg, rgb(88 166 255 / 55%), rgb(163 113 247 / 55%)) border-box;
+  box-shadow: 0 18px 46px var(--k-shadow-card);
+}
+
+.home-punch strong {
+  background: linear-gradient(96deg, var(--vp-c-accent), var(--k-accent-2) 78%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.4rem;
+  margin-right: 6px;
+}
+
+.home-install {
+  max-width: 480px;
+  margin: 0 auto 18px;
+  padding: 11px 18px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg-elv);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  color: var(--vp-c-accent);
+  box-shadow: 0 0 26px rgb(88 166 255 / 10%);
+}
+
+.home-install .prompt {
+  color: var(--vp-c-text-subtle);
+  margin-right: 6px;
+}
+
+.home-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.home-links .chip {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg-elv);
+  color: var(--vp-c-text);
+  font-size: 14px;
+  /* 胶囊行是导航不是正文 ⇒ 不带下划线 */
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-links .chip:hover {
+  border-color: rgb(88 166 255 / 60%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgb(88 166 255 / 18%);
+  text-decoration: none;
+}
+
+/* AI 直读胶囊（紫色系，与品牌蓝区分） */
+.chip-ai {
+  border-color: rgb(163 113 247 / 45%) !important;
+  color: var(--k-chip-ai) !important;
+}
+
+.chip-ai:hover {
+  border-color: #a371f7 !important;
+  box-shadow: 0 8px 24px rgb(163 113 247 / 20%) !important;
+}
+
+/* 尊重系统的减弱动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

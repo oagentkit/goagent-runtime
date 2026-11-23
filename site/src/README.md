@@ -26,6 +26,21 @@ features:
     details: 多个副本共享一个 PostgreSQL：同一会话集群内只有一个副本执行，副本崩溃后别的副本接管重跑，已施加的副作用不会第二次施加。
 ---
 
+<div class="home-punch"><strong>「装配层要做的事，宿主一件都不用做。」</strong>状态机 · 幂等 · 预算 · 恢复，全在 runtime 里接好。</div>
+
+<div class="home-install"><span class="prompt">▸</span>go get github.com/yi-nology/goagent-runtime@latest</div>
+
+<div class="home-links">
+  <a class="chip" href="/goagent-runtime/guide/quickstart.html">五分钟上手</a>
+  <a class="chip" href="/goagent-runtime/guide/architecture.html">架构总览</a>
+  <a class="chip" href="/goagent-runtime/guide/concepts.html">核心概念</a>
+  <a class="chip" href="/goagent-runtime/packages/">包导览</a>
+  <a class="chip" href="/goagent-runtime/templates/">模板选型</a>
+  <a class="chip" href="/goagent-runtime/advanced/recovery.html">崩溃恢复</a>
+  <a class="chip chip-ai" href="https://yi-nology.github.io/goagent-kernel/llms.txt">AI 直读 llms.txt</a>
+  <a class="chip" href="https://github.com/yi-nology/goagent-runtime">GitHub &#8599;</a>
+</div>
+
 ## 它处在哪一层
 
 <ArchDiagram />
