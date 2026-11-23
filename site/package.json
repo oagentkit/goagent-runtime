@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run gen:reference && vuepress dev src",
+    "dev": "npm run test:gen && npm run gen:reference && vuepress dev src",
+    "test:gen": "node scripts/gen_reference_pages.mjs --selftest",
     "gen:reference": "node scripts/gen_reference_pages.mjs",
     "check:reference": "node scripts/gen_reference_pages.mjs --check",
     "check:links": "node scripts/check-links.mjs",
-    "build": "npm run gen:reference && npm run check:links && vuepress build src",
+    "build": "npm run test:gen && npm run gen:reference && npm run check:links && vuepress build src",
     "build:debug": "vuepress build src --debug"
   },
   "devDependencies": {

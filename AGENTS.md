@@ -61,3 +61,10 @@ AI 编码代理在本仓工作时执行本节纪律。病灶=长会话中模型�
   `--check` 模式）；要改事实改源头文件后跑 `npm run gen:reference`。
   坑表数据文件里的 kernel 地板版本与 go.mod 对账，对不上即红。
   CI 作业：`site`（生成页同步 + 站点构建）。
+- `CHANGELOG.md` 由**家族工具** `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成
+  （本仓不自研第二份生成器；CI 的 `changelog` 作业拿钉住 SHA 的工具跑 `--check`）。
+  判据口径是「覆盖级」：手写的发布说明可以留着（工具认），但**漏版本段 / 漏条目是红的**。
+  发版后要重生成：`python3 <matrix-tools>/scripts/gen_changelogs.py --repo goagent-runtime --root ..`。
+- `docs/adr/` 是**决策记录的真相源**（每篇六项：状态/日期/背景/决策/后果/依据 + 一句话结论）。
+  README 只留结论，推导一律在 ADR。新增流程写在该目录的 README.md 里；
+  站点侧的索引页与逐篇 ADR 页由生成器投影，**手改生成物会被 CI 判红**。

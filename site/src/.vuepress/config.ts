@@ -3,8 +3,25 @@ import { defineUserConfig } from 'vuepress'
 import { defaultTheme } from '@vuepress/theme-default'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+
+// ADR 侧栏清单由生成器产出（site/scripts/gen_reference_pages.mjs）。
+//
+// 为什么不写死在本文件里：每加一篇 ADR 就要手改一次侧栏配置，
+// 而那一次手改总会有人忘——侧栏与实际页数就此漂移，且没有任何东西会红。
+// 故清单从生成物读：页数变了，配置自动跟着变。
+//
+// 清单文件不存在时直接报错而不是静默用空数组：那是构建顺序错了
+// （npm run build 会先跑生成器），不是「本仓没有 ADR」。
+let adrManifest: { file: string; id: string; title: string }[] = []
+try {
+  adrManifest = JSON.parse(readFileSync(new URL('./adr-manifest.json', import.meta.url), 'utf8'))
+} catch (err) {
+  console.error('config.ts: 读不到 adr-manifest.json —— 先跑 npm run gen:reference（npm run build 会自动先跑）')
+  throw err
+}
 
 export default defineUserConfig({
   bundler: viteBundler(),
@@ -75,28 +92,31 @@ export default defineUserConfig({
       // 坑速查提到顶栏一级：三站主导航同层（与 kernel 站 / 矩阵站同一形状）。
       { text: '坑速查', link: '/reference/pitfalls.html' },
       // 站群配套链接：与 kernel 站 / 矩阵站同一个入口、同一个标题。
-      // 本仓**没有**自己的 llms.txt（不手搓一份会漂移的生成物），
-      // 所以这里只列族内确实存在的三个。
+      // 本仓的 llms.txt 由 site/scripts/gen_reference_pages.mjs 从仓内事实生成
+      // （不手搓一份会漂移的生成物），所以「本站」这一项现在确实存在。
       {
         text: 'AI 直读',
         children: [
+          { text: '本站 llms.txt', link: 'https://yi-nology.github.io/goagent-runtime/llms.txt' },
           { text: 'kernel llms.txt', link: 'https://yi-nology.github.io/goagent-kernel/llms.txt' },
           { text: 'oekit llms.txt', link: 'https://oekit.github.io/llms.txt' },
           { text: 'oagentkit llms.txt', link: 'https://oagentkit.github.io/llms.txt' },
         ],
       },
       // 参考区：与 kernel 站 / 矩阵站同一个入口、同一个标题。
-      // 本仓没有 CHANGELOG 与 ADR ⇒ 不硬凑「版本记录 / 决策记录」两项
-      // （那两项没有事实源，凑出来就是第二份会漂移的真相）。
+      // 「版本记录」投影自仓内 CHANGELOG.md，「决策记录」投影自仓内 docs/adr/
+      // ——两者都有事实源，不是凑出来的空条目。
       {
         text: '参考',
         children: [
           { text: '机器事实（包 × 依赖 × 能力）', link: '/reference/packages.html' },
           { text: '门禁体系', link: '/reference/gates.html' },
+          { text: '决策记录（ADR）', link: '/reference/adr.html' },
+          { text: '版本记录', link: '/reference/releases.html' },
         ],
       },
     ],
-    footer: 'MIT License · github.com/yi-nology/goagent-runtime · <a href="https://yi-nology.github.io/goagent-kernel/llms.txt">AI 直读 llms.txt</a>',
+    footer: 'MIT License · github.com/yi-nology/goagent-runtime · <a href="https://yi-nology.github.io/goagent-runtime/llms.txt">AI 直读 llms.txt</a>',
     sidebar: {
       '/guide/': [
         { text: '入门', children: ['/guide/', '/guide/quickstart.html', '/guide/architecture.html', '/guide/concepts.html'] },
@@ -114,7 +134,19 @@ export default defineUserConfig({
         { text: '参与贡献', children: ['/dev/'] },
       ],
       '/reference/': [
-        { text: '参考', children: ['/reference/packages.html', '/reference/gates.html', '/reference/pitfalls.html'] },
+        {
+          text: '参考',
+          children: [
+            '/reference/packages.html',
+            '/reference/gates.html',
+            '/reference/adr.html',
+            '/reference/releases.html',
+            '/reference/pitfalls.html',
+          ],
+        },
+      ],
+      '/adr/': [
+        { text: '决策记录', children: adrManifest.map((a) => '/adr/' + a.file.replace(/\.md$/, '.html')) },
       ],
     },
   }),
