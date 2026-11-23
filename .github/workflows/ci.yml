@@ -20,6 +20,8 @@ jobs:
         run: go test ./... -count=1 -timeout 120s -coverprofile=coverage.out
       - name: Coverage
         run: go tool cover -func=coverage.out | tail -1
+      - name: 依赖面门禁（纯判据包不得链数据库驱动）
+        run: bash scripts/check-dep-edges.sh
 
   integration:
     name: integration（PG 参考实现：kernel 共享契约套件 + SIGKILL e2e）

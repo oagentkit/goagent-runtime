@@ -36,6 +36,20 @@
 // 本包只适合**单机单副本**。多副本 / 跨机一律用 PostgreSQL：SQLite 的单文件
 // 锁跨机不可靠。判据由 cmd/storagecheck 机判。
 //
+// # 驱动名约束（选型红线，issue #12）
+//
+// 本包 `import _ "modernc.org/sqlite"` 注册的驱动名是 **"sqlite"**。
+// `database/sql` 的驱动注册表是**进程级全局态**：同名第二次 `sql.Register`
+// 直接 `panic`——发生在 `init`，应用一行业务代码都跑不到，且报错不指明是
+// 哪个包引进来的第二个驱动。典型现场：宿主已链接 `github.com/glebarez/go-sqlite`
+// 这类同名注册的 fork，再拖入本包 ⇒ `panic: sql: Register called twice for
+// driver sqlite`。
+//
+//   - **全二进制只允许一个驱动注册 "sqlite"**；宿主自带同名驱动时**不得**
+//     拖入本包或 `storage/sqlitestore`（后者是本包的绑定面，驱动边在它那里）。
+//   - 宿主只要内存面 ⇒ 只 import `storage`（纯判据包，零驱动边）。
+//   - 排查：`go list -deps <你的 main 包> | grep -E 'sqlite'` 看第二个驱动是谁引进来的。
+//
 // # 驱动与版本
 //
 // 驱动是 modernc.org/sqlite **v1.61.0**（纯 Go，无 cgo ⇒ CGO_ENABLED=0 的

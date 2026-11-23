@@ -32,6 +32,16 @@ cluster 的前置是 kernel 侧两项 P0 已修复并发布（控制面权威介
 | `NewStandalone` | SQLite 单文件（WAL） | 本机服务，进程重启可恢复 |
 | `cluster` | PostgreSQL（多副本共享） | 多副本 / 高可用 worker 池 |
 
+## SQLite 驱动名约束（选型红线）
+
+`sqliteadapter` 用 `modernc.org/sqlite` 注册驱动名 **`"sqlite"`**。`database/sql` 的驱动注册表是**进程级全局态**：同名第二次 `sql.Register` 直接 `panic`——发生在 `init`，应用一行业务代码都跑不到，且报错不指明是哪个包引进来的第二个驱动。
+
+- **全二进制只允许一个驱动注册 `"sqlite"`**。宿主若已链接别的同名驱动（如 `github.com/glebarez/go-sqlite`，modernc 的 fork），就**不得再拖入** `sqliteadapter` / `storage/sqlitestore`。
+- 宿主自带 SQLite 驱动时的出路：① 只需要内存面 → 只 import `storage`（**零驱动边**，见「## 包」表）；② 要真 SQLite → 用宿主自己的驱动实现 kernel 的 `checkpoint.StoreCAS` 契约（判据归 kernel）。
+- 排查线索：`panic: sql: Register called twice for driver sqlite` 即此冲突；`go list -deps <你的 main 包> | grep -E 'sqlite'` 看第二个驱动是谁引进来的。
+- 本仓侧由 `make deps` 守着：纯判据包（`storage`）不得链数据库驱动，判据跑不起来即判红。
+- 判据面与绑定面为什么这样分（以及拆分带来的破坏性变更），推导见 [ADR-0007](docs/adr/ADR-0007-驱动绑定归绑定包.md)。
+
 ## cluster：多副本形态（PG + worker 池）
 
 - **形态**：多个副本共享一个 PostgreSQL。任一副本可接单、可执行；同一会话的执行权在集群内**有且只有一个副本**（认领 + 租约 + 接管代次，走 kernel `taskboard` 判据）；副本崩了，任务由别的副本接手；结果经 PG 事件面回传给等待方（跨副本事件面，不另造结果表）。
@@ -72,7 +82,9 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 | `chat` | 供应商中立的模型窄接口与消息类型 |
 | `pipeline` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） |
 | `agentloop` | 可恢复回合循环（预算守卫 + 检查点 + 事件） |
-| `storage` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） |
+| `adjudicate` | 副作用未知态的周期裁决（证据回查 → 三态判定 → 落裁决；#1） |
+| `storage` | 存储判据面（Provider 契约 + 内存实现；**零驱动边**——纯判据包不带数据库驱动，见 #10） |
+| `storage/sqlitestore` | standalone 形态的 SQLite Provider 绑定（**驱动边只在这一包**：modernc 驱动不进 `storage` 纯判据包） |
 | `sqliteadapter` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） |
 | `pgstore` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） |
 | `runtime` | 模板装配（embedded / standalone） |

@@ -16,5 +16,6 @@ title: 决策记录（ADR）
 | [ADR-0004](/goagent-runtime/adr/ADR-0004-恢复不完整历史要报错不猜.html) | 恢复不完整历史要报错不猜 | 历史不完整是异常不是状态——恢复出来的历史要么完整要么没有这一段，中间态 fail-closed 报错，不猜。 | 已采纳（Accepted） |
 | [ADR-0005](/goagent-runtime/adr/ADR-0005-cluster-不重复施加靠业务幂等键.html) | cluster 的不重复施加靠业务幂等键 | 「接管不重复施加副作用」的前提是宿主声明业务幂等键——这是结构性保证，不靠模型复述同一个 ID。 | 已采纳（Accepted） |
 | [ADR-0006](/goagent-runtime/adr/ADR-0006-容器后端是参考实现.html) | 容器后端是参考实现 | 容器后端是参考实现——宿主抄它不 import 它，部署形态不焊进依赖面。 | 已采纳（Accepted） |
+| [ADR-0007](/goagent-runtime/adr/ADR-0007-驱动绑定归绑定包.html) | 驱动绑定归绑定包 | 驱动绑定归绑定包——判据面（`storage`）零驱动边，绑定面（`storage/sqlitestore`）才带驱动，宿主按面 import。 | 已采纳（Accepted） |
 
 > 仓内索引：https://github.com/yi-nology/goagent-runtime/blob/main/docs/adr/README.md（新增 ADR 的流程写在那里）。

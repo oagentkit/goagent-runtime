@@ -15,7 +15,8 @@
 //   node site/scripts/gen_reference_pages.mjs          # 生成
 //   node site/scripts/gen_reference_pages.mjs --check  # 只校验是否已是最新（CI 用）
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -124,34 +125,46 @@ function packageDoc(files) {
   return ''
 }
 
-function listDiskPackages(goMod) {
+// 磁盘上的包枚举。**必须递归下钻**：包可以嵌套在子目录里
+// （storage/sqlitestore 就是这种形态），只扫顶层会把子包变成隐形——
+// 而本函数产出的清单正是「README 包表 ⇄ 磁盘目录」对账的**判定面**，
+// 判定面漏包 ⇒ 对账表自己就在漏报（issue #10 的教训）。
+const SKIP_TOP_DIRS = new Set(['site', 'examples'])
+
+function listDiskPackages(goMod, root = REPO) {
   const out = []
-  for (const name of readdirSync(REPO).sort()) {
-    if (name.startsWith('.') || name.startsWith('_')) continue
-    if (name === 'site' || name === 'examples') continue
-    const dir = join(REPO, name)
-    if (!statSync(dir).isDirectory()) continue
-    const all = readdirSync(dir).filter((f) => f.endsWith('.go'))
-    if (!all.length) continue
-    const prod = all.filter((f) => !f.endsWith('_test.go'))
-    const files = prod.map((f) => join(dir, f))
-    let lines = 0
-    for (const f of files) {
-      for (const line of read(f).split('\n')) if (line.trim()) lines++
+  const walk = (dir, rel) => {
+    for (const name of readdirSync(dir).sort()) {
+      if (name.startsWith('.') || name.startsWith('_')) continue
+      const full = join(dir, name)
+      if (!statSync(full).isDirectory()) continue
+      if (!rel && SKIP_TOP_DIRS.has(name)) continue
+      const childRel = rel ? rel + '/' + name : name
+      const all = readdirSync(full).filter((f) => f.endsWith('.go'))
+      if (all.length) {
+        const prod = all.filter((f) => !f.endsWith('_test.go'))
+        const files = prod.map((f) => join(full, f))
+        let lines = 0
+        for (const f of files) {
+          for (const line of read(f).split('\n')) if (line.trim()) lines++
+        }
+        const deps = new Set()
+        for (const p of collectImports(files)) {
+          const m = moduleOfImport(p, goMod)
+          if (m) deps.add(m)
+        }
+        out.push({
+          name: childRel,
+          prodFiles: prod.length,
+          prodLines: lines,
+          deps: [...deps].sort(),
+          doc: packageDoc(files),
+        })
+      }
+      walk(full, childRel)
     }
-    const deps = new Set()
-    for (const p of collectImports(files)) {
-      const m = moduleOfImport(p, goMod)
-      if (m) deps.add(m)
-    }
-    out.push({
-      name,
-      prodFiles: prod.length,
-      prodLines: lines,
-      deps: [...deps].sort(),
-      doc: packageDoc(files),
-    })
   }
+  walk(root, '')
   if (!out.length) fail('磁盘上解析出 0 个包——枚举失效')
   return out
 }
@@ -796,6 +809,25 @@ function selftestParse() {
   ok('真实 CHANGELOG 至少一个版本段', releases.length >= 1)
   ok('真实 ci.yml 至少一个作业', jobs.length >= 1)
   ok('真实 ADR 都带一句话结论与状态', adrs.every((a) => a.summary && a.status))
+
+  // ⑨ 磁盘包枚举：嵌套子包必须被看见（issue #10 的教训——判定面漏包 ⇒ 对账表自己漏报）
+  // 夹具在临时目录里造一棵两层的包树（顶层包 + 嵌套子包）。断言「子包被看见」
+  // 在旧的「只扫顶层」实现下必然红 ⇒ 这条就是「坏实现会红」的用例，不是恒真断言。
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'genpkg-'))
+  try {
+    mkdirSync(join(fixtureRoot, 'pure'), { recursive: true })
+    mkdirSync(join(fixtureRoot, 'pure', 'binding'), { recursive: true })
+    writeFileSync(join(fixtureRoot, 'pure', 'a.go'), 'package pure\n')
+    writeFileSync(join(fixtureRoot, 'pure', 'binding', 'b.go'), 'package binding\n')
+    const scanned = listDiskPackages(goMod, fixtureRoot).map((p) => p.name)
+    ok('磁盘包枚举：顶层包被看见', scanned.includes('pure'))
+    ok('磁盘包枚举：嵌套子包必须被看见（只扫顶层 ⇒ 对账表漏报）', scanned.includes('pure/binding'))
+    ok('磁盘包枚举：夹具自检（只有这两个包，防止断言恒真）', scanned.length === 2)
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true })
+  }
+  const realDisk = listDiskPackages(goMod).map((p) => p.name)
+  ok('真实仓内嵌套包 storage/sqlitestore 被枚举到', realDisk.includes('storage/sqlitestore'))
 
   selftestMode = false
   const bad = results.filter((r) => !r.ok)
