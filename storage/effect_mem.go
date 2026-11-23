@@ -371,7 +371,7 @@ func (s *memEffectStore) ResolveUncertainOwned(_ context.Context, act sideeffect
 }
 
 // resolveLocked 裁决主体。requiredHolder 非空时先校验对账占用凭据
-//（已完成的重放无害，先于凭据校验——读既有事实不问资格）。
+// （已完成的重放无害，先于凭据校验——读既有事实不问资格）。
 // now 必须由调用方在**加锁前**取好传入：本方法在持锁状态运行，
 // 不得再调 s.clock()（Mutex 不可重入，那是自死锁）。
 func (s *memEffectStore) resolveLocked(act sideeffect.Action, res sideeffect.Resolution, requiredHolder string, now time.Time) (sideeffect.Outcome, sideeffect.Result, error) {

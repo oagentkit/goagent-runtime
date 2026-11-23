@@ -68,8 +68,8 @@ import (
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/observe"
-	"github.com/yi-nology/goagent-runtime/pipeline"
 	"github.com/yi-nology/goagent-runtime/pgstore"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // ResultEventType 结果事件类型：执行副本把一次执行的 Result 写进事件面，

@@ -2,9 +2,9 @@ package pipeline_test
 
 import (
 	"context"
-	"time"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"

@@ -138,7 +138,7 @@ func (c *Cluster) claimNext(ctx context.Context, w *executor) (taskboard.Task, b
 // execute 执行一次已认领的任务，并回传结果。
 func (c *Cluster) execute(ctx context.Context, w *executor, task taskboard.Task) {
 	lease, err := kw.NewLeaseSession(ctx, c.board, task, kw.LeaseSessionConfig{
-		TTL:          c.cfg.LeaseTTL,
+		TTL:           c.cfg.LeaseTTL,
 		RenewInterval: c.cfg.LeaseTTL / 3,
 	})
 	if err != nil {

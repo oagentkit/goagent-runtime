@@ -2,11 +2,11 @@ package agentloop_test
 
 import (
 	"context"
-	"time"
 	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	kerrors "github.com/oekit/pkg/errors"
 

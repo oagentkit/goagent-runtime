@@ -185,7 +185,7 @@ func TestObserverReceivesEvents(t *testing.T) {
 		Model: &scriptedModel{script: []chat.ChatResponse{
 			{Content: "直接回答"},
 		}},
-		Tools:  demoTools(tl),
+		Tools: demoTools(tl),
 		Observer: func(ev eventbus.Event) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -253,8 +253,8 @@ func TestAssemblePicksJointProvider(t *testing.T) {
 	spy := &jointSpyProvider{Mem: storage.NewMem(), events: eventbus.NewMemoryStore()}
 	m := &scriptedModel{script: []chat.ChatResponse{{Content: "ok"}}}
 	rt, err := runtime.NewEmbedded(runtime.Config{
-		Model:  m,
-		Tools:  []pipeline.Tool{},
+		Model: m,
+		Tools: []pipeline.Tool{},
 	}, runtime.WithStorage(spy))
 	if err != nil {
 		t.Fatalf("装配失败: %v", err)
