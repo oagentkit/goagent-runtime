@@ -11,7 +11,7 @@ title: 机器事实（包 × 依赖 × 能力）
 要改事实请改源头文件——**手抄一遍就等于多一份会静默失真的真相**。
 :::
 
-## 包清单（10 个包）
+## 包清单（11 个包）
 
 依赖列只列仓外 import；「无」表示只用标准库与本仓包。
 生产行数 = 非测试 .go 文件的非空行数（含注释）。
@@ -19,16 +19,17 @@ title: 机器事实（包 × 依赖 × 能力）
 
 | 包 | 生产文件 | 生产行数 | 仓外依赖 | 职责 | 职责来源 |
 |---|---|---|---|---|---|
-| `agentloop` | 1 | 359 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | README 包表 |
+| `adjudicate` | 1 | 180 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | —— 副作用未知态的周期裁决框架（yi-nology/goagent-runtime#1）。 | 包文档注释 |
+| `agentloop` | 3 | 615 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | README 包表 |
 | `chat` | 1 | 65 | 无 | 供应商中立的模型窄接口与消息类型 | README 包表 |
-| `cluster` | 2 | 545 | `github.com/jackc/pgx/v5`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） | README 包表 |
+| `cluster` | 2 | 532 | `github.com/jackc/pgx/v5`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） | README 包表 |
 | `containerbackend` | 10 | 2112 | `github.com/oagentkit/guardx`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** | README 包表 |
 | `observe` | 1 | 33 | `github.com/oekit/concurrency`、`github.com/yi-nology/goagent-kernel` | eventbus → 宿主回调 | README 包表 |
-| `pgstore` | 18 | 3492 | `github.com/jackc/pgx/v5`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） | README 包表 |
-| `pipeline` | 1 | 159 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | README 包表 |
-| `runtime` | 1 | 187 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
-| `sqliteadapter` | 19 | 3856 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel`、`modernc.org/sqlite` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） | README 包表 |
-| `storage` | 4 | 554 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） | README 包表 |
+| `pgstore` | 19 | 3526 | `github.com/jackc/pgx/v5`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） | README 包表 |
+| `pipeline` | 1 | 171 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | README 包表 |
+| `runtime` | 1 | 193 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
+| `sqliteadapter` | 20 | 3885 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel`、`modernc.org/sqlite` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） | README 包表 |
+| `storage` | 4 | 565 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储装配面（内存判据移植；SQLite/PG 门面转发本仓参考实现） | README 包表 |
 
 ## README 包表 ⇄ 磁盘目录（对账）
 
@@ -36,6 +37,7 @@ title: 机器事实（包 × 依赖 × 能力）
 
 | 包 | 在 README「包」表 | 在磁盘 |
 |---|---|---|
+| `adjudicate` | ✗ | ✓ |
 | `agentloop` | ✓ | ✓ |
 | `chat` | ✓ | ✓ |
 | `cluster` | ✓ | ✓ |
@@ -47,7 +49,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | `sqliteadapter` | ✓ | ✓ |
 | `storage` | ✓ | ✓ |
 
-两处清单**完全一致**（10/10）。
+**当前有 1 处对不上**：磁盘有而 README 表没有 → `adjudicate`；改完源头文件重跑生成器，本段会自动收口。
 
 ## 依赖（go.mod）
 
