@@ -86,13 +86,15 @@ type Config struct {
 	// OnEmitError 事件发射失败的宿主回调；nil = 只计数不回调。发射失败从此
 	// 不再静默吞（issue #2 可观测面：孤儿事件/终态事件丢失从此可见）。
 	OnEmitError func(err error)
-	// ApprovalGate 工具执行前的人工审批闸（issue #4 第一切片=同步闸，仅对
-	// 声明了 pipeline.Tool.NeedsApproval 的工具生效）。approved=false ⇒ 副作用
-	// 不施加，拒绝以工具观察回喂模型（可自行改道）；err ≠ nil ⇒ fail-closed
-	// 本轮失败上抛（闸失败=无法证明获准）。闸内等待由宿主实现（轮询/等
-	// channel），ctx 超时仍归循环管；nil = 无审批面。异步挂起/恢复形态
-	// （挂起即快照、凭 token 续跑）留后续切片。
-	ApprovalGate func(ctx context.Context, sessionID string, call chat.ToolCall) (bool, error)
+	// ApprovalGate 工具执行前的人工审批闸（issue #4：仅对声明了
+	// pipeline.Tool.NeedsApproval 的工具生效）。三态决策：
+	// ApprovalApprove ⇒ 直通执行；ApprovalDeny ⇒ 副作用不施加、拒绝以工具
+	// 观察回喂模型（可自行改道）；ApprovalSuspend ⇒ 提交 awaiting 快照后
+	// Run 返回（PendingCallID 携带挂起调用），宿主离线收集决策后经
+	// Approve(callID, approved) 落决策续跑。err ≠ nil ⇒ fail-closed 本轮
+	// 失败上抛（闸失败=无法证明获准）。同步等待由宿主在闸内实现，ctx 超时
+	// 仍归循环管；nil = 无审批面。
+	ApprovalGate func(ctx context.Context, sessionID string, call chat.ToolCall) (Approval, error)
 }
 
 // Result 一次 Run 的结果。
@@ -110,6 +112,9 @@ type Result struct {
 	// EmitFailed 事件发射失败次数（checkpoint 已提交但事件未落库 = 孤儿事件
 	// / 终态事件丢失的可观测面；恢复重跑须自行对账）。
 	EmitFailed int
+	// PendingCallID 挂起等审批的调用 ID（Status=awaiting_approval 时有值；
+	// Approve 落决策的锚点）。
+	PendingCallID string
 }
 
 // Loop 可恢复的回合循环。
@@ -155,14 +160,24 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 	if err := l.committer.SeedFromStore(ctx, sessionID); err != nil {
 		return nil, errors.Wrap(err, "回灌快照序号基线失败", "session", sessionID)
 	}
-	messages, done, err := l.loadHistory(ctx, sessionID)
+	snap, messages, done, err := l.loadHistory(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
+	// 挂起中的会话 Run 短路：awaiting 状态下模型协议上不接受「assistant
+	// 工具请求悬而未决」的历史继续对话——先走 Approve 落决策再续跑。
+	if snap != nil && snap.Status == StatusAwaitingApproval {
+		return &Result{Status: StatusAwaitingApproval, PendingCallID: pendingCallID(messages)}, nil
+	}
 	messages = append(messages, chat.Message{Role: chat.RoleUser, Content: user})
-
 	used := roundguard.Used{Tools: map[string]int{}}
 	res := &Result{Status: contract.StatusRunning}
+	return l.drive(ctx, sessionID, messages, done, used, res)
+}
+
+// drive 主回合驱动循环：预算闸 → 模型调用 → 审批闸 → 工具施加 → 快照提交。
+// Run 与 Approve 共享这一条路径（单源，禁复制漂移）。
+func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Message, done []string, used roundguard.Used, res *Result) (*Result, error) {
 	forced := false // 收尾轮标记：预算用尽后给模型的最后一次机会
 
 	for {
@@ -235,16 +250,19 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 				}
 				// 执行前人工审批闸（issue #4）：只闸声明了 NeedsApproval 的工具。
 				if l.cfg.ApprovalGate != nil && l.cfg.Tools.NeedsApproval(call.Name) {
-					approved, err := l.cfg.ApprovalGate(ctx, sessionID, call)
+					decision, err := l.cfg.ApprovalGate(ctx, sessionID, call)
 					if err != nil {
 						// fail-closed：闸失败=无法证明获准，副作用不施加。
 						return res, errors.Wrap(err, "审批闸失败", "session", sessionID, "tool", call.Name)
 					}
-					if !approved {
+					switch decision {
+					case ApprovalApprove:
+						// 批准：直通执行。
+					case ApprovalDeny:
 						// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
 						messages = append(messages, chat.Message{
 							Role:       chat.RoleTool,
-							Content:    "工具调用被人工审批拒绝，副作用未施加；请调整方案或改用其他工具。",
+							Content:    denyObservation,
 							ToolCallID: call.ID,
 						})
 						done = append(done, call.ID)
@@ -252,6 +270,16 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 							"call_id": call.ID, "tool": call.Name, "outcome": "approval_denied",
 						})
 						continue
+					default:
+						// 挂起（ApprovalSuspend；未知决策值同义——保守挂起）：
+						// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
+						res.Status = StatusAwaitingApproval
+						res.PendingCallID = call.ID
+						if err := l.commit(ctx, sessionID, messages, done, res.Status); err != nil {
+							return res, err
+						}
+						l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
+						return res, nil
 					}
 				}
 				out := l.cfg.Tools.Execute(ctx, sessionID, call)
@@ -288,8 +316,9 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 }
 
 // loadHistory 读恢复点：历史 + 已完成工具调用。首次运行（ErrNotFound）
-// 返回初始历史（仅系统提示）。
-func (l *Loop) loadHistory(ctx context.Context, sessionID string) ([]chat.Message, []string, error) {
+// 返回初始历史（仅系统提示）。awaiting 状态的快照放行「最后一条 assistant
+// 消息存在未答复调用」（挂起形态），更早消息的未答复仍是篡改。
+func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.Snapshot, []chat.Message, []string, error) {
 	snap, err := l.cfg.Store.Load(ctx, sessionID)
 	if err != nil {
 		if errors.Is(err, checkpoint.ErrNotFound) {
@@ -297,22 +326,23 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) ([]chat.Messag
 			if l.cfg.System != "" {
 				msgs = append(msgs, chat.Message{Role: chat.RoleSystem, Content: l.cfg.System})
 			}
-			return msgs, nil, nil
+			return nil, msgs, nil, nil
 		}
-		return nil, nil, errors.Wrap(err, "读取会话快照失败", "session", sessionID)
+		return nil, nil, nil, errors.Wrap(err, "读取会话快照失败", "session", sessionID)
 	}
-	if err := verifyHistory(snap.Fields[fieldHistory]); err != nil {
-		return nil, nil, errors.Wrap(err, "会话快照历史不完整", "session", sessionID)
+	allowPending := snap.Status == StatusAwaitingApproval
+	if err := verifyHistory(snap.Fields[fieldHistory], allowPending); err != nil {
+		return nil, nil, nil, errors.Wrap(err, "会话快照历史不完整", "session", sessionID)
 	}
 	var messages []chat.Message
 	if raw := snap.Fields[fieldHistory]; raw != "" {
 		if err := json.Unmarshal([]byte(raw), &messages); err != nil {
-			return nil, nil, errors.Wrap(err, "会话快照历史反序列化失败", "session", sessionID)
+			return nil, nil, nil, errors.Wrap(err, "会话快照历史反序列化失败", "session", sessionID)
 		}
 	}
 	// 序号游标回灌：本次提交的序号必须从已持久化的最大值续起。
 	l.seq = snap.Seq
-	return messages, append([]string(nil), snap.Done...), nil
+	return &snap, messages, append([]string(nil), snap.Done...), nil
 }
 
 // commit 落一次进度快照（序号严格递增），历史整体序列化进 Fields。
@@ -340,7 +370,10 @@ func (l *Loop) commit(ctx context.Context, sessionID string, messages []chat.Mes
 // verifyHistory 历史完整性校验：assistant 的每个工具调用必须都有对应的
 // tool 结果回填。不满足 = 存储里的历史不完整（崩溃窗口不会产出这种形态，
 // 出现即外部篡改/实现漂移），fail-closed。
-func verifyHistory(raw string) error {
+//
+// allowPending（挂起形态放行面）：仅允许**最后一条** assistant 消息存在
+// 未答复调用——这正是挂起提交的形态；更早消息的未答复调用仍是篡改。
+func verifyHistory(raw string, allowPending bool) error {
 	if raw == "" {
 		return nil
 	}
@@ -354,12 +387,19 @@ func verifyHistory(raw string) error {
 			answered[m.ToolCallID] = true
 		}
 	}
-	for _, m := range messages {
+	lastAssistant := -1
+	for i, m := range messages {
+		if m.Role == chat.RoleAssistant {
+			lastAssistant = i
+		}
+	}
+	for i, m := range messages {
 		if m.Role != chat.RoleAssistant {
 			continue
 		}
+		pendingOK := allowPending && i == lastAssistant
 		for _, c := range m.ToolCalls {
-			if !answered[c.ID] {
+			if !answered[c.ID] && !pendingOK {
 				return errors.Newf("assistant 的工具调用缺少结果回填: call_id=%s tool=%s", c.ID, c.Name)
 			}
 		}

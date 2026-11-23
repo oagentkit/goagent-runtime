@@ -423,15 +423,15 @@ func TestEmitFailureObservable(t *testing.T) {
 type approvalGateSpy struct {
 	mu       sync.Mutex
 	asked    int
-	approved bool
+	decision agentloop.Approval
 	err      error
 }
 
-func (g *approvalGateSpy) gate(_ context.Context, _ string, _ chat.ToolCall) (bool, error) {
+func (g *approvalGateSpy) gate(_ context.Context, _ string, _ chat.ToolCall) (agentloop.Approval, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.asked++
-	return g.approved, g.err
+	return g.decision, g.err
 }
 
 func (g *approvalGateSpy) asks() int {
@@ -442,7 +442,7 @@ func (g *approvalGateSpy) asks() int {
 
 // newGatedLoop 装配带审批闸的测试循环（单工具 calc，NeedsApproval 可调）。
 func newGatedLoop(t *testing.T, m chat.Model, c *counter, budget roundguard.Budget,
-	needsApproval bool, gate func(context.Context, string, chat.ToolCall) (bool, error)) (*agentloop.Loop, *storage.Mem) {
+	needsApproval bool, gate func(context.Context, string, chat.ToolCall) (agentloop.Approval, error)) (*agentloop.Loop, *storage.Mem) {
 	t.Helper()
 	mem := storage.NewMem()
 	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{
@@ -468,7 +468,7 @@ func TestApprovalGateApproved(t *testing.T) {
 		{Content: "终答"},
 	}}
 	c := &counter{}
-	g := &approvalGateSpy{approved: true}
+	g := &approvalGateSpy{decision: agentloop.ApprovalApprove}
 	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
 
 	res, err := l.Run(context.Background(), "sess-gate-ok", "开始")
@@ -494,7 +494,7 @@ func TestApprovalGateDenied(t *testing.T) {
 		{Content: "收到拒绝，改道终答"},
 	}}
 	c := &counter{}
-	g := &approvalGateSpy{approved: false}
+	g := &approvalGateSpy{decision: agentloop.ApprovalDeny}
 	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
 
 	res, err := l.Run(context.Background(), "sess-gate-deny", "开始")
@@ -548,7 +548,7 @@ func TestApprovalGateOnlyMarkedTools(t *testing.T) {
 		{Content: "终答"},
 	}}
 	c := &counter{}
-	g := &approvalGateSpy{approved: true}
+	g := &approvalGateSpy{decision: agentloop.ApprovalApprove}
 	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, false, g.gate)
 
 	res, err := l.Run(context.Background(), "sess-gate-skip", "开始")
@@ -563,5 +563,124 @@ func TestApprovalGateOnlyMarkedTools(t *testing.T) {
 	}
 	if g.asks() != 0 {
 		t.Fatalf("未标记工具不得过闸，询问应 0 次，got %d", g.asks())
+	}
+}
+
+// TestApprovalSuspendResume 异步形态全链：闸 Suspend ⇒ Run 返回 awaiting
+// （PendingCallID 携带挂起调用）；Approve 批准 ⇒ 走标准施加面执行+续跑到终态。
+func TestApprovalSuspendResume(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "续跑终答"},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{decision: agentloop.ApprovalSuspend}
+	l, mem := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	res, err := l.Run(context.Background(), "sess-susp", "开始")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != agentloop.StatusAwaitingApproval {
+		t.Fatalf("挂起应返回 awaiting_approval，got %s", res.Status)
+	}
+	if res.PendingCallID != "call-1" {
+		t.Fatalf("PendingCallID 应携带挂起调用，got %q", res.PendingCallID)
+	}
+	if c.count() != 0 {
+		t.Fatalf("挂起时副作用不得施加，got %d", c.count())
+	}
+	snap, err := mem.Checkpoints().Load(context.Background(), "sess-susp")
+	if err != nil {
+		t.Fatalf("读挂起快照失败: %v", err)
+	}
+	if snap.Status != agentloop.StatusAwaitingApproval {
+		t.Fatalf("快照状态应为 awaiting_approval，got %s", snap.Status)
+	}
+	res2, err := l.Run(context.Background(), "sess-susp", "开始")
+	if err != nil {
+		t.Fatalf("挂起态重复 Run 失败: %v", err)
+	}
+	if res2.Status != agentloop.StatusAwaitingApproval || res2.PendingCallID != "call-1" {
+		t.Fatalf("挂起态重复 Run 应幂等短路，got %+v", res2)
+	}
+	if m.calls != 1 {
+		t.Fatalf("重复 Run 不得调模型，模型调用应 1 次，got %d", m.calls)
+	}
+
+	res3, err := l.Approve(context.Background(), "sess-susp", "call-1", true)
+	if err != nil {
+		t.Fatalf("Approve 失败: %v", err)
+	}
+	if res3.Status != contract.StatusSucceeded {
+		t.Fatalf("批准续跑应 succeeded，got %s", res3.Status)
+	}
+	if c.count() != 1 {
+		t.Fatalf("批准后工具应执行 1 次，got %d", c.count())
+	}
+}
+
+// TestApprovalSuspendDeny 挂起后拒绝：副作用不施加，拒绝观察回喂模型改道。
+func TestApprovalSuspendDeny(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+		{Content: "拒绝后改道终答"},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{decision: agentloop.ApprovalSuspend}
+	l, _ := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	if _, err := l.Run(context.Background(), "sess-deny", "开始"); err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	res, err := l.Approve(context.Background(), "sess-deny", "call-1", false)
+	if err != nil {
+		t.Fatalf("Approve 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("拒绝后模型改道应 succeeded，got %s", res.Status)
+	}
+	if c.count() != 0 {
+		t.Fatalf("拒绝后副作用不得施加，got %d", c.count())
+	}
+	found := false
+	for _, msg := range m.lastRequest().Messages {
+		if msg.Role == chat.RoleTool && strings.Contains(msg.Content, "审批拒绝") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("拒绝观察未回喂模型")
+	}
+}
+
+// TestApprovalSuspendWrongCallID callID 不匹配 ⇒ fail-closed 拒绝落决策，
+// 会话保持挂起（幂等可重试）。
+func TestApprovalSuspendWrongCallID(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
+	}}
+	c := &counter{}
+	g := &approvalGateSpy{decision: agentloop.ApprovalSuspend}
+	l, mem := newGatedLoop(t, m, c, roundguard.Budget{MaxRounds: 4}, true, g.gate)
+
+	if _, err := l.Run(context.Background(), "sess-wrong", "开始"); err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if _, err := l.Approve(context.Background(), "sess-wrong", "call-999", true); err == nil {
+		t.Fatal("callID 不匹配必须拒绝落决策")
+	}
+	if c.count() != 0 {
+		t.Fatalf("误决策不得施加副作用，got %d", c.count())
+	}
+	snap, _ := mem.Checkpoints().Load(context.Background(), "sess-wrong")
+	if snap.Status != agentloop.StatusAwaitingApproval {
+		t.Fatalf("拒绝决策后会话应保持挂起，got %s", snap.Status)
+	}
+	if _, err := l.Approve(context.Background(), "sess-wrong", "call-1", true); err != nil {
+		t.Fatalf("正确 callID 重试应成功: %v", err)
+	}
+	if c.count() != 1 {
+		t.Fatalf("重试批准后工具应执行，got %d", c.count())
 	}
 }
