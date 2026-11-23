@@ -72,6 +72,8 @@ export default defineUserConfig({
       { text: '模板', link: '/templates/' },
       { text: '进阶', link: '/advanced/recovery.html' },
       { text: '参与贡献', link: '/dev/' },
+      // 坑速查提到顶栏一级：三站主导航同层（与 kernel 站 / 矩阵站同一形状）。
+      { text: '坑速查', link: '/reference/pitfalls.html' },
       // 站群配套链接：与 kernel 站 / 矩阵站同一个入口、同一个标题。
       // 本仓**没有**自己的 llms.txt（不手搓一份会漂移的生成物），
       // 所以这里只列族内确实存在的三个。
@@ -81,6 +83,16 @@ export default defineUserConfig({
           { text: 'kernel llms.txt', link: 'https://yi-nology.github.io/goagent-kernel/llms.txt' },
           { text: 'oekit llms.txt', link: 'https://oekit.github.io/llms.txt' },
           { text: 'oagentkit llms.txt', link: 'https://oagentkit.github.io/llms.txt' },
+        ],
+      },
+      // 参考区：与 kernel 站 / 矩阵站同一个入口、同一个标题。
+      // 本仓没有 CHANGELOG 与 ADR ⇒ 不硬凑「版本记录 / 决策记录」两项
+      // （那两项没有事实源，凑出来就是第二份会漂移的真相）。
+      {
+        text: '参考',
+        children: [
+          { text: '机器事实（包 × 依赖 × 能力）', link: '/reference/packages.html' },
+          { text: '门禁体系', link: '/reference/gates.html' },
         ],
       },
     ],
@@ -100,6 +112,9 @@ export default defineUserConfig({
       ],
       '/dev/': [
         { text: '参与贡献', children: ['/dev/'] },
+      ],
+      '/reference/': [
+        { text: '参考', children: ['/reference/packages.html', '/reference/gates.html', '/reference/pitfalls.html'] },
       ],
     },
   }),

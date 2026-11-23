@@ -55,3 +55,9 @@ AI 编码代理在本仓工作时执行本节纪律。病灶=长会话中模型�
   以 `/` 开头且**不含** base。判据：`site/scripts/check-links.mjs`（正文链接自带 base + 目标
   页面存在；路由链接为纯路由路径；base 解析不到即判红）——已前置到 `site` 的 build（Pages
   因此不可能再发出 404 链接），并在 ci.yml 有 `site-links` 作业。
+- 站点的「机器事实 / 门禁体系 / 坑速查」三页是**生成物**：由
+  `site/scripts/gen_reference_pages.mjs` 从仓库事实生成（磁盘上的包目录 / go.mod /
+  Makefile / ci.yml / `site/data/pitfalls.json`）。**手改生成物会被 CI 判红**（生成器的
+  `--check` 模式）；要改事实改源头文件后跑 `npm run gen:reference`。
+  坑表数据文件里的 kernel 地板版本与 go.mod 对账，对不上即红。
+  CI 作业：`site`（生成页同步 + 站点构建）。

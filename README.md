@@ -78,6 +78,7 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 | `runtime` | 模板装配（embedded / standalone） |
 | `cluster` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） |
 | `observe` | eventbus → 宿主回调 |
+| `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** |
 
 ## 判据的归属（不发明第二套）
 
