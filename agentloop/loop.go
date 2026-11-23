@@ -117,7 +117,7 @@ type Result struct {
 	// EmitFailed 事件发射失败次数（checkpoint 已提交但事件未落库 = 孤儿事件
 	// / 终态事件丢失的可观测面；恢复重跑须自行对账）。
 	EmitFailed int
-	// PendingCallID 挂起等审批的调用 ID（Status=awaiting_approval 时有值；
+	// PendingCallID 挂起等审批的调用 ID（Status=waiting_approval 时有值；
 	// Approve 落决策的锚点）。
 	PendingCallID string
 }

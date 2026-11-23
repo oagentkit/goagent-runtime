@@ -1,10 +1,11 @@
 // 审批闸的挂起/恢复形态（issue #4 第二切片）。
 //
 // 同步闸（第一切片）在闸内等待；本文件提供异步形态：闸返回 ApprovalSuspend
-// ⇒ 提交 awaiting 快照后 Run 返回，宿主离线收集决策后经 Approve 落决策
+// ⇒ 提交 waiting_approval 快照后 Run 返回，宿主离线收集决策后经 Approve 落决策
 // 续跑。挂起提交的快照 = 最后一条 assistant 消息存在未答复调用 + 状态
-// awaiting_approval（verifyHistory 的放行面只认这一种形态，更早消息的
-// 未答复仍是篡改，fail-closed 不变）。
+// waiting_approval（verifyHistory 的放行面只认这一种形态，更早消息的
+// 未答复仍是篡改，fail-closed 不变）。状态词面=kernel contract 既有
+// StatusWaitingApproval（Open 态），不 runtime 侧自造。
 package agentloop
 
 import (
@@ -19,9 +20,10 @@ import (
 	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
-// StatusAwaitingApproval 会话挂起等审批的快照/结果状态。runtime 侧状态词表
-// 扩展：kernel contract 词表尚无此值（上游收编后迁入 contract.Status*）。
-const StatusAwaitingApproval = "awaiting_approval"
+// StatusAwaitingApproval 会话挂起等审批的快照/结果状态。对齐 kernel
+// contract 既有词表（StatusWaitingApproval，Open 态）——同义异名统一，
+// 不再 runtime 侧自造词面（挂起=等待人工决策的 Open 态，非终态）。
+const StatusAwaitingApproval = contract.StatusWaitingApproval
 
 // Approval 审批闸三态决策。
 type Approval string
