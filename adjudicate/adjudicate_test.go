@@ -194,6 +194,26 @@ func TestGraceWindowAndBatch(t *testing.T) {
 	}
 }
 
+// TestGraceZeroExplicit WithGrace(0) 显式不等待：cutoff=now（即时对账/测试
+// 形态）——0 是合法显式值而非「忽略」。
+func TestGraceZeroExplicit(t *testing.T) {
+	ctx := context.Background()
+	runner, _ := newRunner(t)
+	src := &fakeSource{}
+	loop, err := adjudicate.NewLoop(src, adjudicate.NewRouter(), runner, adjudicate.WithGrace(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now()
+	if _, err := loop.ReconcileOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// cutoff 应≈now（不落后 5m 缺省）。
+	if src.cutoffSeen.Before(before.Add(-time.Second)) {
+		t.Fatalf("grace=0 的 cutoff 应≈now, got %v", src.cutoffSeen)
+	}
+}
+
 // TestNewLoopFailFast 装配期缺件 fail-fast。
 func TestNewLoopFailFast(t *testing.T) {
 	runner, _ := newRunner(t)
@@ -232,5 +252,126 @@ func TestRouterOrderAndErrorPassThrough(t *testing.T) {
 	got, ok, err := r2.Resolve(ctx, item)
 	if err != nil || !ok || !got.Applied {
 		t.Fatalf("第二个裁决应生效, got=%+v ok=%v err=%v", got, ok, err)
+	}
+}
+
+// TestObserverEvents 观测钩子逐项回调：settled 带 Resolution/Outcome、
+// 无人认识 skipped（Err=nil）、判据不足 deferred（Err=其错误）。
+func TestObserverEvents(t *testing.T) {
+	ctx := context.Background()
+	runner, store := newRunner(t)
+
+	applied := act("k-obs-applied", false)
+	_, lease, _, err := store.Acquire(ctx, applied, time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkUncertain(ctx, applied, lease, "test"); err != nil {
+		t.Fatal(err)
+	}
+	deferred := act("k-obs-deferred", false)
+	_, lease2, _, err := store.Acquire(ctx, deferred, time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkUncertain(ctx, deferred, lease2, "test"); err != nil {
+		t.Fatal(err)
+	}
+	mystery := act("k-obs-mystery", false)
+
+	src := &fakeSource{items: []adjudicate.Item{
+		{Action: applied, MarkedAt: time.Now().Add(-time.Hour)},
+		{Action: deferred, MarkedAt: time.Now().Add(-time.Hour)},
+		{Action: mystery, MarkedAt: time.Now().Add(-time.Hour)},
+	}}
+	var got []adjudicate.Observation
+	loop, err := adjudicate.NewLoop(src, fakeResolver{fn: func(item adjudicate.Item) (sideeffect.Resolution, bool, error) {
+		switch string(item.Action.Key) {
+		case "k-obs-deferred":
+			return sideeffect.Resolution{}, false, errors.New("下游查询超时")
+		case "k-obs-mystery":
+			return sideeffect.Resolution{}, false, nil
+		default:
+			return sideeffect.Resolution{Applied: true, Result: sideeffect.Result{Payload: []byte(`{"id":1}`)}}, true, nil
+		}
+	}}, runner, adjudicate.WithObserver(func(_ context.Context, o adjudicate.Observation) {
+		got = append(got, o)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, rerr := loop.ReconcileOnce(ctx)
+	if rerr == nil {
+		t.Fatal("deferred 应汇总返回 error")
+	}
+	if st.Settled != 1 || st.Skipped != 1 || st.Deferred != 1 {
+		t.Fatalf("stats=%+v", st)
+	}
+	if len(got) != 3 {
+		t.Fatalf("observer 应收到 3 次回调, got %d: %+v", len(got), got)
+	}
+	byEvent := map[string]adjudicate.Observation{}
+	for _, o := range got {
+		byEvent[o.Event] = o
+	}
+	s := byEvent[adjudicate.EventSettled]
+	if s.Err != nil || !s.Resolution.Applied || string(s.Resolution.Result.Payload) != `{"id":1}` {
+		t.Fatalf("settled 观测面错: %+v", s)
+	}
+	k := byEvent[adjudicate.EventSkipped]
+	if k.Err != nil {
+		t.Fatalf("无人认识的 skipped 应 Err=nil: %v", k.Err)
+	}
+	d := byEvent[adjudicate.EventDeferred]
+	if d.Err == nil {
+		t.Fatal("deferred 应带判据不足错误")
+	}
+}
+
+// TestNotUncertainConcurrentSkipped 并发已裁决（ErrNotUncertain）按 skipped
+// 计且不进错误面——否则每个可重试 Key 每周期刷失败告警（提出方生产实证语义）。
+func TestNotUncertainConcurrentSkipped(t *testing.T) {
+	ctx := context.Background()
+	runner, store := newRunner(t)
+	a := act("k-pending", false)
+	// 只 Acquire 不 MarkUncertain：行处 pending（非未知态）→ 裁决得 ErrNotUncertain。
+	if outcome, _, _, err := store.Acquire(ctx, a, time.Minute); err != nil || outcome != sideeffect.OutcomeApplied {
+		t.Fatalf("Acquire 应授予, outcome=%v err=%v", outcome, err)
+	}
+	src := &fakeSource{items: []adjudicate.Item{{Action: a, MarkedAt: time.Now().Add(-time.Hour)}}}
+	var obsErr error
+	loop, err := adjudicate.NewLoop(src, fakeResolver{fn: func(adjudicate.Item) (sideeffect.Resolution, bool, error) {
+		return sideeffect.Resolution{Applied: true}, true, nil
+	}}, runner, adjudicate.WithObserver(func(_ context.Context, o adjudicate.Observation) {
+		obsErr = o.Err
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, rerr := loop.ReconcileOnce(ctx)
+	if rerr != nil {
+		t.Fatalf("ErrNotUncertain 不应进错误面: %v", rerr)
+	}
+	if st.Skipped != 1 || st.Settled != 0 || st.Failures != 0 {
+		t.Fatalf("stats=%+v", st)
+	}
+	if !errors.Is(obsErr, sideeffect.ErrNotUncertain) {
+		t.Fatalf("观测面应带 ErrNotUncertain sentinel, got %v", obsErr)
+	}
+}
+
+// TestContextCancelMidLoop 上下文取消：本轮中止并返回 ctx 错误（已结算面保留）。
+func TestContextCancelMidLoop(t *testing.T) {
+	runner, _ := newRunner(t)
+	a := act("k-ctx", false)
+	src := &fakeSource{items: []adjudicate.Item{{Action: a, MarkedAt: time.Now().Add(-time.Hour)}}}
+	loop, err := adjudicate.NewLoop(src, adjudicate.NewRouter(), runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := loop.ReconcileOnce(cctx); err == nil {
+		t.Fatal("已取消 ctx 应返回 error")
 	}
 }

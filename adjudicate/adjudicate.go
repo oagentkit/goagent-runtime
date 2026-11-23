@@ -102,17 +102,44 @@ func (r *Router) Resolve(ctx context.Context, item Item) (sideeffect.Resolution,
 type Stats struct {
 	Scanned  int // 枚举到的候选数
 	Settled  int // 成功落裁决数（已生效记完成 + 未生效释放）
-	Skipped  int // 无人认识的 Key 数（类型不受支持）
+	Skipped  int // 无人认识的 Key 数（类型不受支持）+ 并发已裁决数
 	Deferred int // 判据不足本轮未裁决数
 	NotDue   int // 未到静置窗被 Source 滤掉的计数（Source 实现可选返回）
 	Failures int // 落裁决失败数（错误已汇总）
 }
+
+// 逐项观测事件词表（Observer 消费）。
+const (
+	// EventSettled 落裁决成功（Resolution/Outcome 有效）。
+	EventSettled = "settled"
+	// EventSkipped 无人认识（Err=nil）或并发已裁决（Err=ErrNotUncertain）。
+	EventSkipped = "skipped"
+	// EventDeferred resolver 认识但判据不足（Err=其错误），本轮不裁决。
+	EventDeferred = "deferred"
+	// EventFailed 落库失败（Err=其错误）。
+	EventFailed = "failed"
+)
+
+// Observation 一次逐项结算的观测面（Observer 输入）。
+type Observation struct {
+	Item       Item
+	Event      string
+	Resolution sideeffect.Resolution // EventSettled 时有效
+	Outcome    sideeffect.Outcome    // EventSettled 时有效（落库返回）
+	Err        error                 // 非 Settled：Skipped 仅并发已裁决带 sentinel；Deferred/Failed 为对应错误
+}
+
+// Observer 逐项观测钩子：宿主接自己的 obs/日志面（观测分布、告警、结构化
+// 日志），Loop 自身保持零日志零指标（纯库纪律）。每项结算后同步调用；
+// 钩子应是纯观测（不改判据、不 panic——panic 会中断本轮对账）。
+type Observer func(ctx context.Context, o Observation)
 
 // Loop 对账循环（无 goroutine：ReconcileOnce 是单轮，周期由宿主驱动）。
 type Loop struct {
 	source   Source
 	resolver Resolver
 	runner   *sideeffect.Runner
+	observer Observer
 	grace    time.Duration
 	batch    int
 }
@@ -120,11 +147,12 @@ type Loop struct {
 // LoopOption 装配选项。
 type LoopOption func(*Loop)
 
-// WithGrace 未知态静置窗（默认 DefaultGrace）。须覆盖施加方「失败→标未知
-// →释放」的最长窗口，否则对账会与在途动作抢判。
+// WithGrace 未知态静置窗（默认 DefaultGrace；显式 0 = 不等待，测试/即时
+// 对账形态）。须覆盖施加方「失败→标未知→释放」的最长窗口，否则对账会与
+// 在途动作抢判；负值忽略（保持缺省）。
 func WithGrace(d time.Duration) LoopOption {
 	return func(l *Loop) {
-		if d > 0 {
+		if d >= 0 {
 			l.grace = d
 		}
 	}
@@ -135,6 +163,15 @@ func WithBatch(n int) LoopOption {
 	return func(l *Loop) {
 		if n > 0 {
 			l.batch = n
+		}
+	}
+}
+
+// WithObserver 逐项观测钩子（nil = 不观测）。
+func WithObserver(o Observer) LoopOption {
+	return func(l *Loop) {
+		if o != nil {
+			l.observer = o
 		}
 	}
 }
@@ -171,22 +208,37 @@ func (l *Loop) ReconcileOnce(ctx context.Context) (Stats, error) {
 	st.Scanned = len(items)
 	var errs []error
 	for _, item := range items {
+		if cerr := ctx.Err(); cerr != nil {
+			return st, errors.Wrap(cerr, "adjudicate: 上下文取消，本轮中止", "settled", st.Settled, "scanned", st.Scanned)
+		}
 		res, ok, rerr := l.resolver.Resolve(ctx, item)
 		if rerr != nil {
 			st.Deferred++
+			l.observe(ctx, Observation{Item: item, Event: EventDeferred, Err: rerr})
 			errs = append(errs, errors.Wrap(rerr, "adjudicate: 裁决判据不足", "key", string(item.Action.Key)))
 			continue
 		}
 		if !ok {
 			st.Skipped++ // 无人认识：留痕等扩展，绝不猜
+			l.observe(ctx, Observation{Item: item, Event: EventSkipped})
 			continue
 		}
-		if _, _, serr := l.runner.Reconcile(ctx, item.Action, res); serr != nil {
+		outcome, _, serr := l.runner.Reconcile(ctx, item.Action, res)
+		if serr != nil {
+			if errors.Is(serr, sideeffect.ErrNotUncertain) {
+				// 并发：另一对账者/人工先落结论——不是故障，按 skipped 计
+				//（否则每个可重试 Key 每周期都刷失败告警）。
+				st.Skipped++
+				l.observe(ctx, Observation{Item: item, Event: EventSkipped, Err: serr})
+				continue
+			}
 			st.Failures++
+			l.observe(ctx, Observation{Item: item, Event: EventFailed, Err: serr})
 			errs = append(errs, errors.Wrap(serr, "adjudicate: 裁决落库失败", "key", string(item.Action.Key)))
 			continue
 		}
 		st.Settled++
+		l.observe(ctx, Observation{Item: item, Event: EventSettled, Resolution: res, Outcome: outcome})
 	}
 	// 错误面：Stats 已逐类计数（Deferred/Failures），返回值带首个错误 +
 	// 总数——pkg/errors 无 Join 且本仓不混 stdlib errors（AGENTS 红线）。
@@ -194,4 +246,11 @@ func (l *Loop) ReconcileOnce(ctx context.Context) (Stats, error) {
 		return st, errors.Wrap(errs[0], "adjudicate: 本轮对账有未决错误", "total", len(errs))
 	}
 	return st, nil
+}
+
+// observe 调用观测钩子（nil 钩子静默跳过）。
+func (l *Loop) observe(ctx context.Context, o Observation) {
+	if l.observer != nil {
+		l.observer(ctx, o)
+	}
 }
