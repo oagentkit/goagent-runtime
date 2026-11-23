@@ -163,10 +163,15 @@ func assemble(cfg Config, opts []Option, prep func(*assembly) error, closeFn fun
 	bus := eventbus.New()
 	rt := &Runtime{stop: func() {}, closeFn: closeFn, loopBus: bus}
 
-	// 事件发射：有持久化面（standalone）走 DurablePublisher 落库，
-	// 否则走裸广播（embedded）。
+	// 事件发射三分派：Provider 支持联合提交（两脸同库，如 SQLite）⇒ Joint
+	// 模式——事件随快照单事务落库（issue #2 主体：孤儿事件/终态事件丢失的
+	// 崩溃窗口结构闭合），广播走裸总线；否则有持久化面走 DurablePublisher
+	// （两步旧路径）；都没有=裸广播（embedded）。
 	var emitter agentloop.Emitter
-	if a.storage.Events() != nil {
+	var joint agentloop.JointCommitter
+	if j, ok := a.storage.(storage.JointCommitter); ok && a.storage.Events() != nil {
+		joint = j
+	} else if a.storage.Events() != nil {
 		rt.publisher = eventbus.NewDurablePublisher(bus, a.storage.Events())
 		emitter = durableEmitter{p: rt.publisher}
 	}
@@ -184,6 +189,7 @@ func assemble(cfg Config, opts []Option, prep func(*assembly) error, closeFn fun
 		Tools:   pipe,
 		Store:   a.storage.Checkpoints(),
 		Emitter: emitter,
+		Joint:   joint,
 		Bus:     rt.loopBus,
 		Budget:  cfg.Budget,
 		System:  cfg.System,

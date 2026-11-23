@@ -13,6 +13,7 @@
 package storage
 
 import (
+	"context"
 	"time"
 
 	"github.com/yi-nology/goagent-kernel/checkpoint"
@@ -29,6 +30,14 @@ type Provider interface {
 	Effects() sideeffect.Store
 	// Events 事件持久化面；nil = 只广播不持久化（embedded 形态的默认）。
 	Events() eventbus.Store
+}
+
+// JointCommitter 快照+事件单事务提交面（可选能力面，issue #2 主体）：
+// 事件行与快照行同生共死——孤儿事件/终态事件丢失的崩溃窗口由结构闭合。
+// Provider 实现满足该接口时（如 storage.SQLite），runtime 装配自动走联合
+// 提交模式；内存形态（Events()==nil）无联合意义。
+type JointCommitter interface {
+	CommitWithEvents(ctx context.Context, snap checkpoint.Snapshot, events []eventbus.Event) error
 }
 
 // Mem embedded 形态的内存 Provider（单进程）。

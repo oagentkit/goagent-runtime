@@ -95,6 +95,11 @@ type Config struct {
 	// 失败上抛（闸失败=无法证明获准）。同步等待由宿主在闸内实现，ctx 超时
 	// 仍归循环管；nil = 无审批面。
 	ApprovalGate func(ctx context.Context, sessionID string, call chat.ToolCall) (Approval, error)
+	// Joint 快照+事件单事务提交面（issue #2 主体：事件行与快照行同生共死
+	// ——孤儿事件/终态事件丢失的崩溃窗口结构闭合）。非 nil 时 emit 改为
+	// 累计、commit 改为联合提交（提交成功后统一广播，广播失败只计数）；
+	// nil = 两步旧路径（现状语义，向后兼容）。
+	Joint JointCommitter
 }
 
 // Result 一次 Run 的结果。
@@ -127,6 +132,10 @@ type Loop struct {
 	committer *checkpoint.Committer
 	seq       uint64
 	fallback  atomic.Uint64
+	// pendings Joint 模式的事件累计面（emit 构造后不发送，随下一次快照
+	// 提交原子落库）。同一 Loop 的 Run/Approve 不得并发（快照序号是进程内
+	// 单调游标）⇒ 本字段顺序使用安全。
+	pendings []eventbus.Event
 }
 
 // New 装配循环（装配期校验，fail fast）。
@@ -275,7 +284,7 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 						// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
 						res.Status = StatusAwaitingApproval
 						res.PendingCallID = call.ID
-						if err := l.commit(ctx, sessionID, messages, done, res.Status); err != nil {
+						if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
 							return res, err
 						}
 						l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
@@ -299,7 +308,7 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				res.Uncertain = append(res.Uncertain, call.ID)
 			}
 			// 回填与提交在同一段顺序代码里：崩溃窗口的两端各自自洽。
-			if err := l.commit(ctx, sessionID, messages, done, contract.StatusRunning); err != nil {
+			if err := l.commit(ctx, res, sessionID, messages, done, contract.StatusRunning); err != nil {
 				return res, err
 			}
 		}
@@ -308,10 +317,12 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 		}
 	}
 
-	if err := l.commit(ctx, sessionID, messages, done, res.Status); err != nil {
+	// 终态事件先于终态提交构造（Joint 模式下随快照原子落库；两步模式下
+	// 崩溃窗口从「终态事件丢失」换为「可对账的重复」——重复好于丢）。
+	l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
+	if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
 		return res, err
 	}
-	l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
 	return res, nil
 }
 
@@ -348,7 +359,12 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.S
 // commit 落一次进度快照（序号严格递增），历史整体序列化进 Fields。
 // 序号由调用侧单调游标管理（SeqGate 只判不分配），恢复时经 loadHistory
 // 回灌——不回灌则本次 Seq=1 会被「已持久化序号 >= 本次」拒收。
-func (l *Loop) commit(ctx context.Context, sessionID string, messages []chat.Message, done []string, status string) error {
+//
+// Joint 模式分派（issue #2 主体）：事件行随快照单事务落库（同生共死——
+// 联合提交失败整批回滚，pendings 保留待下轮重试）；提交成功后统一广播
+// （进程内广播 fire-and-forget 无失败语义，数据已原子）。旧路径=先落
+// 快照，事件由 emit 即时发（向后兼容）。
+func (l *Loop) commit(ctx context.Context, res *Result, sessionID string, messages []chat.Message, done []string, status string) error {
 	raw, err := json.Marshal(messages)
 	if err != nil {
 		return errors.Wrap(err, "会话历史序列化失败", "session", sessionID)
@@ -360,6 +376,19 @@ func (l *Loop) commit(ctx context.Context, sessionID string, messages []chat.Mes
 		Status: status,
 		Done:   append([]string(nil), done...),
 		Fields: map[string]string{fieldHistory: string(raw)},
+	}
+	if l.cfg.Joint != nil {
+		events := l.pendings
+		l.pendings = nil
+		if err := l.cfg.Joint.CommitWithEvents(ctx, snap, events); err != nil {
+			return errors.Wrap(err, "联合提交失败", "session", sessionID)
+		}
+		if l.cfg.Bus != nil {
+			for _, ev := range events {
+				l.cfg.Bus.Broadcast(ev)
+			}
+		}
+		return nil
 	}
 	if err := l.committer.Commit(ctx, snap); err != nil {
 		return errors.Wrap(err, "进度快照落库失败", "session", sessionID)
@@ -428,11 +457,20 @@ func (l *Loop) forceFinalPrompt() string {
 	return defaultForceFinalPrompt
 }
 
-// emit 出事件；无发射面时静默跳过（不出事件是合法配置，不是错误）。
-// 发射失败不再静默吞（issue #2）：计数进 Result.EmitFailed，宿主配了
-// OnEmitError 就回调——孤儿事件/终态事件丢失要可观测。
+// emit 出事件。Joint 模式（Config.Joint 非 nil）= 只累计不发送——事件行
+// 与快照行同生共死（issue #2 主体），随下一次 commit 单事务落库后统一广播。
+// 非 Joint：即时发（Emitter nil+Bus=内置纯广播；Emitter=持久化+广播）。
+// 发射失败不再静默吞（issue #2 可观测面）：计数 Result.EmitFailed +
+// OnEmitError 回调。
 func (l *Loop) emit(ctx context.Context, res *Result, sessionID, typ string, payload map[string]any) {
-	if l.cfg.Emitter == nil {
+	if l.cfg.Emitter == nil && l.cfg.Joint == nil {
+		return
+	}
+	if l.cfg.Joint != nil {
+		l.pendings = append(l.pendings, eventbus.Event{
+			SessionID: sessionID, Type: typ, Level: "info",
+			Payload: payload, OccurredAt: time.Now(),
+		})
 		return
 	}
 	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload); err != nil {

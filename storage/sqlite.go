@@ -42,3 +42,7 @@ func (s *SQLite) Events() eventbus.Store { return s.st.Events() }
 
 // Close 关库。
 func (s *SQLite) Close() error { return s.st.Close() }
+
+// AsJoint 快照+事件单事务提交面（可选能力；sqliteadapter 参考实现两脸
+// 同库 ⇒ 支持联合提交。runtime 装配检测到即走 Joint 模式）。
+func (s *SQLite) AsJoint() JointCommitter { return s.st }
