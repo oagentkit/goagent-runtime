@@ -37,6 +37,7 @@ import (
 	"github.com/yi-nology/goagent-runtime/observe"
 	"github.com/yi-nology/goagent-runtime/pipeline"
 	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/storage/sqlitestore"
 )
 
 // DefaultSideEffectTTL 工具副作用租约默认有效期。
@@ -120,12 +121,12 @@ func NewStandalone(cfg Config, sqlitePath string, opts ...Option) (*Runtime, err
 	if sqlitePath == "" {
 		return nil, errors.New("standalone 模板必须给 SQLite 路径（空路径 = 匿名库，历史无处可寻）")
 	}
-	var sq *storage.SQLite
+	var sq *sqlitestore.SQLite
 	rt, err := assemble(cfg, opts, func(a *assembly) error {
 		if a.storage != nil {
 			return nil // 宿主已注入存储（含测试），不再开库
 		}
-		st, err := storage.OpenSQLite(context.Background(), sqlitePath)
+		st, err := sqlitestore.Open(context.Background(), sqlitePath)
 		if err != nil {
 			return err
 		}

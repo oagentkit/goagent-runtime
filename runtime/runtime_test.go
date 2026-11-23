@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/contract"
 	"github.com/yi-nology/goagent-kernel/eventbus"
 
@@ -225,5 +226,49 @@ func TestNilModelRejected(t *testing.T) {
 	}
 	if _, err := runtime.NewStandalone(runtime.Config{Model: &scriptedModel{}}, ""); err == nil {
 		t.Fatal("空 SQLite 路径必须装配期报错")
+	}
+}
+
+// jointSpyProvider 能力断言用 Provider：Mem 全功能 + 内存事件面 +
+// CommitWithEvents 计数（assemble 是否选中 Joint 模式的可观测面）。
+type jointSpyProvider struct {
+	*storage.Mem
+	events eventbus.Store
+	joints int
+}
+
+func (s *jointSpyProvider) Events() eventbus.Store { return s.events }
+
+func (s *jointSpyProvider) CommitWithEvents(_ context.Context, _ checkpoint.Snapshot, _ []eventbus.Event) error {
+	s.joints++
+	return nil
+}
+
+// TestAssemblePicksJointProvider assemble 的 Joint 能力断言回归钉：Provider
+// 实现 JointCommitter 且 Events 非 nil ⇒ 必须选 Joint 模式（commit 走
+// CommitWithEvents）。批662 遗留缺口的堵点——只给 AsJoint 转发器时类型
+// 断言恒 false、NewStandalone 静默落回两步 DurablePublisher 路径，本用例
+// 让该形态恒红。
+func TestAssemblePicksJointProvider(t *testing.T) {
+	spy := &jointSpyProvider{Mem: storage.NewMem(), events: eventbus.NewMemoryStore()}
+	m := &scriptedModel{script: []chat.ChatResponse{{Content: "ok"}}}
+	rt, err := runtime.NewEmbedded(runtime.Config{
+		Model:  m,
+		Tools:  []pipeline.Tool{},
+	}, runtime.WithStorage(spy))
+	if err != nil {
+		t.Fatalf("装配失败: %v", err)
+	}
+	defer func() { _ = rt.Close() }()
+
+	res, err := rt.Run(context.Background(), "sess-detect", "hi")
+	if err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if res.Status != contract.StatusSucceeded {
+		t.Fatalf("应 succeeded，got %s", res.Status)
+	}
+	if spy.joints == 0 {
+		t.Fatal("Provider 实现 JointCommitter 且 Events 非 nil ⇒ assemble 必须选 Joint 模式（commit 走 CommitWithEvents）")
 	}
 }

@@ -7,7 +7,7 @@
 //
 //  1. Provider 把 runtime 需要的存储面**汇总成一个注入点**；
 //  2. NewMem 给 embedded 形态（单进程，判据移植自 kernel 参考运行时）；
-//  3. OpenSQLite 给 standalone 形态（真 SQLite WAL，直接复用本仓的
+//  3. sqlitestore.Open 给 standalone 形态（独立子包：modernc 驱动边不进本纯化包）（真 SQLite WAL，直接复用本仓的
 //     sqliteadapter 参考实现——runtime 是装配层，import 参考实现
 //     正是它的职责；kernel 仓「内核包不拖驱动」的纪律管不到这里）。
 package storage
@@ -34,7 +34,7 @@ type Provider interface {
 
 // JointCommitter 快照+事件单事务提交面（可选能力面，issue #2 主体）：
 // 事件行与快照行同生共死——孤儿事件/终态事件丢失的崩溃窗口由结构闭合。
-// Provider 实现满足该接口时（如 storage.SQLite），runtime 装配自动走联合
+// Provider 实现满足该接口时（如 sqlitestore.SQLite），runtime 装配自动走联合
 // 提交模式；内存形态（Events()==nil）无联合意义。
 type JointCommitter interface {
 	CommitWithEvents(ctx context.Context, snap checkpoint.Snapshot, events []eventbus.Event) error

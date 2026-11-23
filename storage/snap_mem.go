@@ -14,7 +14,7 @@ import (
 // 判据移植自 goagent-kernel examples/reference-runtime（MIT、同作者）：
 // 序号 0 一律拒收；已持久化序号 >= 本次序号 ⇒ ErrStaleSeq 且不写入；
 // Load 无记录返回 ErrNotFound。原子性来自进程内互斥锁——**只在单进程内
-// 成立**；跨进程形态请用 OpenSQLite 或宿主自落库。
+// 成立**；跨进程形态请用 sqlitestore.Open 或宿主自落库。
 type memSnapStore struct {
 	mu    sync.Mutex
 	snaps map[string]checkpoint.Snapshot

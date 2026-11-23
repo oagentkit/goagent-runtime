@@ -5,14 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/yi-nology/goagent-runtime/sqliteadapter"
 	"github.com/yi-nology/goagent-kernel/sidetest"
+	"github.com/yi-nology/goagent-runtime/sqliteadapter"
 
 	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/storage/sqlitestore"
 )
 
 // TestMemEffectsSatisfyKernelContract 用 kernel 的 sidetest 共享契约套件
-//（33 个子测试）钉内存实现：runtime 不另写一套判据，同一段语义。
+// （33 个子测试）钉内存实现：runtime 不另写一套判据，同一段语义。
 func TestMemEffectsSatisfyKernelContract(t *testing.T) {
 	sidetest.Run(t, func(t *testing.T, clock *sidetest.FakeClock) sidetest.ClockedStore {
 		m := storage.NewMem()
@@ -42,9 +43,9 @@ func TestSQLiteEffectsSatisfyKernelContract(t *testing.T) {
 // TestSQLiteProviderFaces SQLite Provider 三面齐备（runtime 装配的前提）。
 func TestSQLiteProviderFaces(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "faces.db")
-	st, err := storage.OpenSQLite(context.Background(), path)
+	st, err := sqlitestore.Open(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenSQLite 失败: %v", err)
+		t.Fatalf("sqlitestore.Open 失败: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
 
