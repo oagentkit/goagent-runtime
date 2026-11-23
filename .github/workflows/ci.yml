@@ -71,3 +71,23 @@ jobs:
           node-version: 22
       - name: 内部链接检查（子路径部署下的 404 防线）
         run: node site/scripts/check-links.mjs
+
+  site:
+    name: 站点构建（生成页同步 + 链接门禁 + 构建）
+    # 站点的「机器事实 / 门禁体系 / 坑速查」三页是**生成物**：由
+    # site/scripts/gen_reference_pages.mjs 从仓库事实（磁盘包目录 / go.mod /
+    # Makefile / ci.yml / 坑表数据）生成。判据本体是生成器的 --check 模式——
+    # 生成物与事实对不上即非零退出（失败形态是变红，不是变绿）。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: 生成页同步校验（生成物与仓库事实不同步即红）
+        run: node site/scripts/gen_reference_pages.mjs --check
+      - name: 站点构建（含内部链接门禁）
+        working-directory: site
+        run: npm ci && npm run build
