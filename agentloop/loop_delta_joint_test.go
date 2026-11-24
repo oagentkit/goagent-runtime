@@ -142,14 +142,16 @@ func TestContentDeltaJointBroadcastsNotPersisted(t *testing.T) {
 		}
 	}
 
-	// ③ 状态面事件照旧落库，且**条数不受增量影响**（两轮 ⇒ 一轮四事件：
-	//    2×round_start + tool_call + session_state）——这是 issue #9 的口径。
+	// ③ 状态面事件照旧落库，且**条数不受增量影响**（两轮 ⇒ 2×round_start +
+	//    tool_call + tool_result + session_state = 5 条——批669 事件面补全后
+	//    工具事件拆成执行前请求 + 执行后收口；issue #9 的「一轮四事件」口径
+	//    相应演进为「一轮五事件」）。
 	types := joint.types()
-	if len(types) != 4 {
-		t.Fatalf("一轮应落 4 条状态面事件，got %d (%v)", len(types), types)
+	if len(types) != 5 {
+		t.Fatalf("一轮应落 5 条状态面事件，got %d (%v)", len(types), types)
 	}
-	if types[3] != agentloop.EventSessionState {
-		t.Fatalf("末条应为终态事件，got %s (%v)", types[3], types)
+	if types[4] != agentloop.EventSessionState {
+		t.Fatalf("末条应为终态事件，got %s (%v)", types[4], types)
 	}
 }
 

@@ -410,12 +410,13 @@ func TestEmitFailureObservable(t *testing.T) {
 	if res.Status != contract.StatusSucceeded {
 		t.Fatalf("应 succeeded，got %s", res.Status)
 	}
-	// 两轮 round_start + 一次 tool_call + 终态 session_state = 4 次发射。
-	if res.EmitFailed != 4 {
-		t.Fatalf("四轮事件应全失败计数 4，got %d", res.EmitFailed)
+	// 两轮 round_start + 一次 tool_call + 一次 tool_result + 终态 session_state = 5 次发射
+	// （工具事件拆成执行前请求 + 执行后收口两件，批669 事件面补全）。
+	if res.EmitFailed != 5 {
+		t.Fatalf("五次事件应全失败计数 5，got %d", res.EmitFailed)
 	}
-	if cb != 4 {
-		t.Fatalf("OnEmitError 应逐次回调 4 次，got %d", cb)
+	if cb != 5 {
+		t.Fatalf("OnEmitError 应逐次回调 5 次，got %d", cb)
 	}
 }
 

@@ -86,8 +86,8 @@ func TestJointCommitEndToEnd(t *testing.T) {
 	}
 
 	events := listEvents(t, sq.Events())
-	if len(events) != 4 {
-		t.Fatalf("一轮应持久化 4 事件（2 round_start+tool_call+session_state），got %d", len(events))
+	if len(events) != 5 {
+		t.Fatalf("一轮应持久化 5 事件（2 round_start+tool_call+tool_result+session_state），got %d", len(events))
 	}
 	if events[len(events)-1].Type != agentloop.EventSessionState {
 		t.Fatalf("末事件应为 session_state，got %s", events[len(events)-1].Type)

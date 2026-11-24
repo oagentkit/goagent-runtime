@@ -182,14 +182,13 @@ func TestToolCallPayloadCarriesBytes(t *testing.T) {
 	if _, err := l.Run(context.Background(), "sess-bytes", "算一下"); err != nil {
 		t.Fatalf("Run 失败: %v", err)
 	}
-	var toolPayloads []map[string]any
-	for _, p := range emu.payloadsOf(agentloop.EventToolCall) {
-		toolPayloads = append(toolPayloads, p)
+	// bytes 键在批669 事件面补全后落在收口事件（tool_result）上——执行轮
+	// tool_call 只有请求参数（执行未始，无结果可计）。
+	results := emu.payloadsOf(agentloop.EventToolResult)
+	if len(results) != 1 {
+		t.Fatalf("应恰一条收口 tool_result: %+v", results)
 	}
-	if len(toolPayloads) != 1 {
-		t.Fatalf("应恰一条执行轮 tool_call: %+v", toolPayloads)
-	}
-	p := toolPayloads[0]
+	p := results[0]
 	if p["tool"] != "calc" || p["bytes"] != 2 {
 		t.Fatalf("payload 应含 tool=calc/bytes=2: %+v", p)
 	}

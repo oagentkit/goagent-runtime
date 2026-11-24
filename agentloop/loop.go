@@ -49,13 +49,25 @@ const fieldHistory = "history"
 const defaultForceFinalPrompt = "预算已用尽：请基于已有信息立即给出最终回答，不要再调用工具。"
 
 // 事件类型词表（eventbus typ 字段取值）。
+//
+// 工具事件配对语义：EventToolCall 是**执行前**的请求事件（参数完整、副作用
+// 未施加），EventToolResult 是执行后的收口事件（outcome + 结果内容）——两侧
+// 用 call_id 配对。宿主（bianque 批669 面2）把这对事件映射到 agentrun 同名
+// 事件词表，SSE 工具卡即获得与既有路径相同的「卡创建（含参数）→ 卡收口
+// （含结果）」形态；执行前后的发射点在同一顺序代码段内，崩溃窗口的两端
+// 各自自洽（与「回填与提交同段」同一纪律）。
 const (
 	EventRoundStart   = "agent.round_start"
 	EventContentDelta = "agent.content_delta"
 	EventToolCall     = "agent.tool_call"
+	EventToolResult   = "agent.tool_result"
 	EventRoundEnd     = "agent.round_end"
 	EventSessionState = "agent.session_status"
 )
+
+// 工具结果 outcome 取值（EventToolResult payload 的 outcome 键）：执行面
+// 复用 pipeline.Kind 词表（applied/replayed/uncertain/refused/failed），
+// 审批闸拒绝为 "approval_denied"（副作用未施加的专用收口值）。
 
 // Emitter 事件发射面。eventbus.DurablePublisher 与本包的 busEmitter
 // 都满足它；nil = 不出事件。
@@ -291,8 +303,9 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 						ToolCallID: call.ID,
 					})
 					done = append(done, call.ID)
-					l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
-						"call_id": call.ID, "tool": call.Name, "outcome": "approval_denied",
+					l.emit(ctx, res, sessionID, EventToolResult, map[string]any{
+						"call_id": call.ID, "tool": call.Name,
+						"outcome": "approval_denied", "content": denyObservation,
 					})
 					continue
 				default:
@@ -307,6 +320,12 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 					return res, nil
 				}
 			}
+			// 执行前请求事件：参数完整、副作用未施加（观测面在卡创建时即拿到
+			// 参数；与收口事件以 call_id 配对）。
+			l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+				"call_id": call.ID, "tool": call.Name, "args": call.Arguments,
+			})
+			// 执行。
 			out := l.cfg.Tools.Execute(ctx, sessionID, call)
 			used.ToolCalls++
 			used.Tools[call.Name]++
@@ -317,10 +336,12 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				ToolCallID: call.ID,
 			})
 			done = append(done, call.ID)
-			l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
-				"call_id": call.ID, "tool": call.Name, "outcome": string(out.Kind),
-				// 结果字节数（审计轨迹面：宿主落 tool 轨迹日志只记长度不记内容）；
-				// 审批拒绝等无结果的调用轮不带本键。
+			l.emit(ctx, res, sessionID, EventToolResult, map[string]any{
+				"call_id": call.ID, "tool": call.Name,
+				"outcome": string(out.Kind), "content": out.Content,
+				// 结果字节数（审计轨迹面：宿主落 tool 轨迹日志只记长度不记内容；
+				// #16 语义收编进批669 的收口事件形态）——审批拒绝等无结果的
+				// 调用轮不带本键。
 				"bytes": len(out.Content),
 			})
 			if out.Kind == pipeline.KindUncertain {
