@@ -19,6 +19,11 @@ oagentkit / oekit   上游原语
 
 cluster 的前置是 kernel 侧两项 P0 已修复并发布（控制面权威介入原子审计 v0.64.3、租约持续故障失格 v0.64.1）。判据仍全部来自 kernel（`taskboard` 抢占/租约/接管代次、`sideeffect` 幂等闸、`roundguard` 预算、`eventbus` 事件面），本仓只做接线，不另写第二套。
 
+## 版本与发布
+
+- **发布说明**：GitHub Releases（每个版本的第一段是「下游要做什么」）与仓内 [CHANGELOG.md](CHANGELOG.md)——后者由家族工具 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，**勿手改**；站点的「版本记录」页是它的投影。
+- **版本指针**：当前最新版本见 [Releases 页](https://github.com/yi-nology/goagent-runtime/releases)。本 README **不硬写版本号**——版本号的事实源是 tag 与 CHANGELOG，抄第二份只会漂。
+- **一条纪律**：`go get` 拿到的模块里，CHANGELOG 必须含该 tag 自己那一段——tag 打在 CHANGELOG 生成之前就会缺段（`v0.6.3` 就是这么缺了一段，其修复随 `v0.6.4` 出货）。CI 的「CHANGELOG 同步校验」作业就是这条纪律的执行体。
 ## 为什么是独立仓
 
 - kernel 的门禁核心是「内核包不拖存储驱动」；装配层必须直接装配 SQLite/PG 驱动与事件面，放进来会把那条判据开口子。
