@@ -16,28 +16,16 @@ outcome/content），两侧 call_id 配对；审批闸拒绝以 tool_result 收�
 agent.tool_result→agentrun tool_result（卡收口含结果）——loop 路径的 SSE
 工具卡与既有 agentrun 路径同形态。相关测试口径同步（一轮四事件→五事件）。
 
+- 文档(changelog)：补 v0.6.2 版本段（tag 已打，生成器对账）+ 站点 releases 追平
+
+## [v0.6.2] — 2026-11-24
+
 ### 新增(agentloop)：tool_call 事件补结果字节数（审计轨迹面）
 
 执行轮 EventToolCall payload 增加 bytes=len(result.Content)——宿主落
 工具轨迹日志只记长度不记内容的既有纪律需要该维度；审批拒绝等无结果
 的调用轮不带本键（桥接方按缺省处理）。判据：counter 返回 "ok" →
 bytes=2 断言。
-
-- 文档(changelog)：补 v0.6.2 版本段（tag 已打，生成器对账）+ 站点 releases 追平
-
-## [v0.6.2] — 2026-11-24
-
-### 新增(agentloop)：工具事件拆成执行前请求+执行后收口（批669 面2 事件映射的上游前置）
-
-EventToolCall 语义收紧为**执行前**的请求事件（payload 补 args——宿主 SSE
-工具卡在卡创建时即拿到参数）；新增 EventToolResult 收口事件（call_id/tool/
-outcome/content），两侧 call_id 配对；审批闸拒绝以 tool_result 收口
-（outcome=approval_denied、content=拒绝观察）。outcome 复用 pipeline.Kind
-词表 + approval_denied 专用值。执行前后的发射点在同一顺序代码段内（与
-「回填与提交同段」同一纪律）。
-宿主映射（bianque 批669）：agent.tool_call→agentrun tool_call（卡创建含参）、
-agent.tool_result→agentrun tool_result（卡收口含结果）——loop 路径的 SSE
-工具卡与既有 agentrun 路径同形态。相关测试口径同步（一轮四事件→五事件）。
 
 ### 新增(make)：真集群验收入口随判据体落到本仓（#418 的可复跑入口）
 
