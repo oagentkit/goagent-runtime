@@ -301,7 +301,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 }
 
 export default defineClientConfig({
-  enhance({ app }) {
+  // ★ router 由 VuePress 直接传进来（enhance?.({ app, router, siteData })）。
+  //   此前从 app.config.globalProperties.$router 取——那个位置在 enhance
+  //   执行时**恒为 undefined** ⇒ 接管从未生效 ⇒ 框架照旧按陈旧布局做
+  //   **平滑**滚动（实测 top=695.9 / 699.8 / 145.6，正确值 1197）⇒ 抖动。
+  enhance({ app, router }) {
     app.component('Mermaid', Mermaid)
     app.component('ArchDiagram', ArchDiagram)
 
@@ -315,9 +319,6 @@ export default defineClientConfig({
     // 所以这里让框架**不要管 hash 定位**（返回 false ⇒ vue-router 不滚），
     // 全部交给上面的对齐循环：它按**此刻**的真实布局数值化地滚，一步到位。
     // 非 hash 的导航仍走框架原本的行为。
-    const router = (
-      app.config.globalProperties as unknown as { $router?: Router }
-    ).$router
     if (router) {
       const prev = router.options.scrollBehavior
       const next: RouterScrollBehavior = (to, from, savedPosition) => {
