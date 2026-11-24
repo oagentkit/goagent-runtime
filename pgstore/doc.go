@@ -32,6 +32,13 @@
 //     写入体报错 ⇒ 整个事务回滚 ⇒ 不得部分写。
 //   - taskboard.Board：认领是一个事务里的读-判-写（行锁），令牌与接管代次
 //     在同一次操作里铸造；释放 / 完成 / 续期只认令牌。
+//   - invocation.Store：工具调用账本——身份不可变（同一 (会话, 调用) 重复
+//     落账而身份不一致 ⇒ ErrIdentityConflict，那是**另一个动作**）；推进是
+//     **一条带条件的 UPDATE**（WHERE state = ANY(前驱集)，前驱集由内核的
+//     invocation.Predecessors 给出——宿主自己反推转移表就是第二份真相）
+//     ⇒「比较与写入」在同一条语句里完成，不存在「先读后写」的窗口。
+//     ⚠ 账本面**刻意不参与跨面批次**（见 journal.go 的包头：账本必须早于
+//     副作用落库，参与批次就等于把 P0-09 的窗口重新打开）。
 //   - checkpoint.StoreCAS：一条带条件的 upsert（WHERE 持久化序号 < 本次序号），
 //     影响行数为 0 即判陈旧。
 //   - controlplane.Store（issue #278）：三个 Snapshot* 在 REPEATABLE READ

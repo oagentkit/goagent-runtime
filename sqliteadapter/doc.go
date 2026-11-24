@@ -64,6 +64,7 @@
 //   - gak_effect_resource 资源级状态（这个资源谁占着 / 发第几代令牌）
 //   - gak_downstream      下游资源（sideeffect.FencedSink 的落点）
 //   - gak_snapshot        进度快照（checkpoint.StoreCAS）
+//   - gak_invocation      工具调用账本（invocation.Store：调用身份 + 进度状态）
 //   - gak_event_watermark 已提交水位线（每租户一行；事件 ID 的铸造点）
 //   - gak_event           事件行（与业务状态同事务提交）
 //   - gak_tail_cursor     尾随游标（eventbus.CursorStore）

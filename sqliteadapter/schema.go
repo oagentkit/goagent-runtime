@@ -16,6 +16,24 @@ import (
 // 刻意放在 Go 侧而不是 init.sql：契约套件与参考部署都从这条路径建表，
 // 单一来源，宿主抄它时不会抄到一份没人维护的 SQL 文件。
 const schemaDDL = `
+-- 工具调用账本（invocation.Store 的落点，P0-09/P0-10 闭合）。
+-- 与 pgref_invocation 同形：同样的键（session_id + call_id）、同样的列语义、
+-- 同样的「一条带条件的 UPDATE 承担比较与写入」形态——只有方言不同。
+-- seq 同样由**存储侧铸造**（与 PG 侧的 IDENTITY 列同款职责，落到方言：
+-- SQLite 用自增列做全局单调计数，PG 用 IDENTITY）。
+CREATE TABLE IF NOT EXISTS gak_invocation (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    call_id     TEXT    NOT NULL,
+    tool        TEXT    NOT NULL DEFAULT '',
+    args_digest TEXT    NOT NULL DEFAULT '',
+    args        BLOB,
+    state       TEXT    NOT NULL,
+    result      BLOB,
+    reason      TEXT    NOT NULL DEFAULT '',
+    UNIQUE (session_id, call_id)
+);
+
 CREATE TABLE IF NOT EXISTS gak_board_task (
     id     TEXT PRIMARY KEY,
     title  TEXT    NOT NULL DEFAULT '',

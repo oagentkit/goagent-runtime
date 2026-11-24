@@ -6,8 +6,8 @@ require (
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/oagentkit/guardx v0.28.0
 	github.com/oekit/concurrency v0.38.1
-	github.com/oekit/pkg v0.57.0
-	github.com/yi-nology/goagent-kernel v0.66.1
+	github.com/oekit/pkg v0.59.0
+	github.com/yi-nology/goagent-kernel v0.75.1
 	modernc.org/sqlite v1.61.0
 )
 
