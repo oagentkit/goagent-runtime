@@ -27,6 +27,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -106,8 +107,13 @@ type Config struct {
 	// Run 返回（PendingCallID 携带挂起调用），宿主离线收集决策后经
 	// Approve(callID, approved) 落决策续跑。err ≠ nil ⇒ fail-closed 本轮
 	// 失败上抛（闸失败=无法证明获准）。同步等待由宿主在闸内实现，ctx 超时
-	// 仍归循环管；nil = 无审批面。
-	ApprovalGate func(ctx context.Context, sessionID string, call chat.ToolCall) (Approval, error)
+	// 仍归循环管。
+	//
+	// ⚠️ **nil 不是「放行」**：若注册的工具里有声明 NeedsApproval 的，
+	// 而这里没装配闸 ⇒ New 直接报错（fail-closed）。否则「审批闸暂时
+	// 没接上」会被当成「无需审批」而让副作用直接施加——那是安全缺陷，
+	// 不是配置便利。
+	ApprovalGate ApprovalGateFunc
 	// Joint 快照+事件单事务提交面（issue #2 主体：事件行与快照行同生共死
 	// ——孤儿事件/终态事件丢失的崩溃窗口结构闭合）。非 nil 时 emit 改为
 	// 累计、commit 改为联合提交（提交成功后统一广播，广播失败只计数）；
@@ -137,18 +143,41 @@ type Result struct {
 
 // Loop 可恢复的回合循环。
 //
-// 同一 Loop 的 Run 不得并发调用：快照序号（seq）是进程内单调游标，
-// 并发 Run 同一 sessionID 须由调用方串行化（或各用各的 Loop 共享存储）。
+// ★ **同一 Loop 的 Run/Approve 可以并发调用**（不同会话互不干扰）：
+// 每次执行的可变状态（历史、已完成调用、预算用量、事件累计、快照序号）
+// 全部收在本次执行的 runState 里，不存在跨执行共享的可变字段。
+//
+// 同一**会话**的并发 Run 仍由 kernel 的快照序号闸裁决：后到者拿到
+// ErrStaleSeq（明确的拒绝），而不是把两个执行的事件混进同一笔快照。
 type Loop struct {
 	cfg       Config
 	gate      *checkpoint.SeqGate
 	committer *checkpoint.Committer
-	seq       uint64
 	fallback  atomic.Uint64
+}
+
+// runState 一次执行（Run 或 Approve）的局部状态。
+//
+// 为什么必须是局部而不是 Loop 的字段：Loop 是**可复用**的装配件（embedded
+// 模板里就是一个进程级单例，HTTP 服务并行处理请求时它被并发调用）。把它
+// 挂在 Loop 上 ⇒ 两个会话的事件、序号、用量互相串扰——跨会话的事件被并进
+// 别人的事务、序号回退导致提交被判陈旧。
+//
+// 局部化的附带收益：本次执行失败时，未提交的待发事件随状态一起消失，
+// 不会滞留在 Loop 里污染下一次执行（Joint 模式下尤其致命：那批事件会被
+// 下一轮连同别的会话一起提交）。
+type runState struct {
+	sessionID string
+	messages  []chat.Message
+	done      []string
+	used      roundguard.Used
+	res       *Result
 	// pendings Joint 模式的事件累计面（emit 构造后不发送，随下一次快照
-	// 提交原子落库）。同一 Loop 的 Run/Approve 不得并发（快照序号是进程内
-	// 单调游标）⇒ 本字段顺序使用安全。
+	// 提交原子落库）。
 	pendings []eventbus.Event
+	// seq 本次执行的快照序号游标（**按会话隔离**：从该会话已落库的快照
+	// 续起；不与其他会话共享，避免跨会话回退）。
+	seq uint64
 }
 
 // New 装配循环（装配期校验，fail fast）。
@@ -164,6 +193,13 @@ func New(cfg Config) (*Loop, error) {
 	}
 	if err := cfg.Budget.Validate(); err != nil {
 		return nil, errors.Wrap(err, "回合预算非法（负额度不许静默降级为不限）")
+	}
+	// 审批闸的 fail-closed 装配判定：有工具声明了执行前人工审批，却没有装配
+	// 审批闸 ⇒ 装配失败。nil 闸**不等于放行**——那会让「审批服务没接上」
+	// 静默变成「无需审批」，副作用直接施加。
+	if req := cfg.Tools.ApprovalRequired(); len(req) > 0 && cfg.ApprovalGate == nil {
+		return nil, errors.Newf("工具声明了执行前人工审批却没有装配审批闸（审批会被绕过）: %s",
+			strings.Join(req, ","))
 	}
 	if cfg.Emitter == nil && cfg.Bus != nil {
 		cfg.Emitter = busEmitter{bus: cfg.Bus}
@@ -192,35 +228,49 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 		return &Result{Status: StatusAwaitingApproval, PendingCallID: pendingCallID(messages)}, nil
 	}
 	messages = append(messages, chat.Message{Role: chat.RoleUser, Content: user})
-	used := roundguard.Used{Tools: map[string]int{}}
-	res := &Result{Status: contract.StatusRunning}
-	return l.drive(ctx, sessionID, messages, done, used, res)
+	st := newRunState(sessionID, messages, done, snap)
+	return l.drive(ctx, st)
+}
+
+// newRunState 建一次执行的局部状态。snap 为 nil = 首次执行（序号从 0 起）。
+func newRunState(sessionID string, messages []chat.Message, done []string, snap *checkpoint.Snapshot) *runState {
+	st := &runState{
+		sessionID: sessionID,
+		messages:  messages,
+		done:      done,
+		used:      roundguard.Used{Tools: map[string]int{}},
+		res:       &Result{Status: contract.StatusRunning},
+	}
+	if snap != nil {
+		st.seq = snap.Seq
+	}
+	return st
 }
 
 // drive 主回合驱动循环：预算闸 → 模型调用 → 审批闸 → 工具施加 → 快照提交。
 // Run 与 Approve 共享这一条路径（单源，禁复制漂移）。
-func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Message, done []string, used roundguard.Used, res *Result) (*Result, error) {
+func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 	forced := false // 收尾轮标记：预算用尽后给模型的最后一次机会
 
 	for {
 		if !forced {
-			v := roundguard.CheckRounds(l.cfg.Budget, used)
+			v := roundguard.CheckRounds(l.cfg.Budget, st.used)
 			if !v.Allowed {
 				if l.cfg.Budget.EffectivePolicy() == roundguard.PolicyForceFinal {
 					forced = true
-					messages = append(messages, chat.Message{
+					st.messages = append(st.messages, chat.Message{
 						Role:    chat.RoleUser,
 						Content: l.forceFinalPrompt(),
 					})
 				} else {
-					res.Status = contract.StatusTimedOut
+					st.res.Status = contract.StatusTimedOut
 					break
 				}
 			}
 		}
 
 		req := chat.ChatRequest{
-			Messages: append([]chat.Message(nil), messages...),
+			Messages: append([]chat.Message(nil), st.messages...),
 			Tools:    l.cfg.Tools.Specs(),
 		}
 		// 流式旁路：模型支持时逐片回调 → content_delta 事件。
@@ -228,22 +278,18 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 		// 挂载条件：**有观测面**（Emitter 非 nil）**或**有联合提交面（Joint
 		// 非 nil）——后者此前不挂 ⇒ 事件随快照落库的形态（standalone / cluster）
 		// 里流式增量静默消失（issue #11 的遗留缺口）。
-		//
-		// 载荷：kind/text 原样透传（保序）；带工具调用片段或计量片段时一并
-		// 带上结构化字段——观测面要**原样**（不归并：归并是响应面的事，
-		// 规则见 chat.DeltaAggregator）。
 		if l.cfg.Emitter != nil || l.cfg.Joint != nil {
 			req.OnDelta = func(d chat.Delta) {
-				l.emitDelta(ctx, res, sessionID, deltaPayload(d))
+				l.emitDelta(ctx, st, deltaPayload(d))
 			}
 		}
 		resp, err := l.cfg.Model.Chat(ctx, req)
 		if err != nil {
 			// ctx 取消/超时上抛：快照已持久化，下次同 sessionID 再 Run 即恢复。
-			return res, errors.Wrap(err, "模型调用失败", "session", sessionID)
+			return st.res, errors.Wrap(err, "模型调用失败", "session", st.sessionID)
 		}
-		used.Rounds++
-		res.Rounds = used.Rounds
+		st.used.Rounds++
+		st.res.Rounds = st.used.Rounds
 
 		// ID 铸造先于入历史：assistant 消息里的 ID 与 pipeline 幂等键同源。
 		calls := make([]chat.ToolCall, len(resp.ToolCalls))
@@ -253,57 +299,57 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				calls[i].ID = l.newID()
 			}
 		}
-		messages = append(messages, chat.Message{
+		st.messages = append(st.messages, chat.Message{
 			Role:      chat.RoleAssistant,
 			Content:   resp.Content,
 			ToolCalls: calls,
 		})
-		l.emit(ctx, res, sessionID, EventRoundStart, map[string]any{
-			"round": used.Rounds, "tool_calls": len(calls),
+		l.emit(ctx, st, EventRoundStart, map[string]any{
+			"round": st.used.Rounds, "tool_calls": len(calls),
 		})
 
 		if len(calls) == 0 {
-			res.Status = contract.StatusSucceeded
-			res.Final = resp.Content
+			st.res.Status = contract.StatusSucceeded
+			st.res.Final = resp.Content
 			break
 		}
 		if forced {
 			// 收尾轮仍请求工具：额度口径到此为止，不再放行。
-			res.Status = contract.StatusTimedOut
+			st.res.Status = contract.StatusTimedOut
 			break
 		}
 
 		stopped := false
 		for _, call := range calls {
-			if v := roundguard.CheckToolCalls(l.cfg.Budget, used); !v.Allowed {
-				res.Status = contract.StatusTimedOut
+			if v := roundguard.CheckToolCalls(l.cfg.Budget, st.used); !v.Allowed {
+				st.res.Status = contract.StatusTimedOut
 				stopped = true
 				break
 			}
-			if v := roundguard.CheckTool(l.cfg.Budget, used, call.Name); !v.Allowed {
-				res.Status = contract.StatusTimedOut
+			if v := roundguard.CheckTool(l.cfg.Budget, st.used, call.Name); !v.Allowed {
+				st.res.Status = contract.StatusTimedOut
 				stopped = true
 				break
 			}
 			// 执行前人工审批闸（issue #4）：只闸声明了 NeedsApproval 的工具。
 			if l.cfg.ApprovalGate != nil && l.cfg.Tools.NeedsApproval(call.Name) {
-				decision, err := l.cfg.ApprovalGate(ctx, sessionID, call)
+				decision, err := l.cfg.ApprovalGate(ctx, st.sessionID, call)
 				if err != nil {
 					// fail-closed：闸失败=无法证明获准，副作用不施加。
-					return res, errors.Wrap(err, "审批闸失败", "session", sessionID, "tool", call.Name)
+					return st.res, errors.Wrap(err, "审批闸失败", "session", st.sessionID, "tool", call.Name)
 				}
 				switch decision {
 				case ApprovalApprove:
 					// 批准：直通执行。
 				case ApprovalDeny:
 					// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
-					messages = append(messages, chat.Message{
+					st.messages = append(st.messages, chat.Message{
 						Role:       chat.RoleTool,
 						Content:    denyObservation,
 						ToolCallID: call.ID,
 					})
-					done = append(done, call.ID)
-					l.emit(ctx, res, sessionID, EventToolResult, map[string]any{
+					st.done = append(st.done, call.ID)
+					l.emit(ctx, st, EventToolResult, map[string]any{
 						"call_id": call.ID, "tool": call.Name,
 						"outcome": "approval_denied", "content": denyObservation,
 					})
@@ -311,32 +357,32 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				default:
 					// 挂起（ApprovalSuspend；未知决策值同义——保守挂起）：
 					// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
-					res.Status = StatusAwaitingApproval
-					res.PendingCallID = call.ID
-					if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
-						return res, err
+					st.res.Status = StatusAwaitingApproval
+					st.res.PendingCallID = call.ID
+					if err := l.commit(ctx, st, st.res.Status); err != nil {
+						return st.res, err
 					}
-					l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
-					return res, nil
+					l.emit(ctx, st, EventSessionState, map[string]any{"status": st.res.Status})
+					return st.res, nil
 				}
 			}
 			// 执行前请求事件：参数完整、副作用未施加（观测面在卡创建时即拿到
 			// 参数；与收口事件以 call_id 配对）。
-			l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+			l.emit(ctx, st, EventToolCall, map[string]any{
 				"call_id": call.ID, "tool": call.Name, "args": call.Arguments,
 			})
 			// 执行。
-			out := l.cfg.Tools.Execute(ctx, sessionID, call)
-			used.ToolCalls++
-			used.Tools[call.Name]++
-			res.ToolCalls = used.ToolCalls
-			messages = append(messages, chat.Message{
+			out := l.cfg.Tools.Execute(ctx, st.sessionID, call)
+			st.used.ToolCalls++
+			st.used.Tools[call.Name]++
+			st.res.ToolCalls = st.used.ToolCalls
+			st.messages = append(st.messages, chat.Message{
 				Role:       chat.RoleTool,
 				Content:    out.Content,
 				ToolCallID: call.ID,
 			})
-			done = append(done, call.ID)
-			l.emit(ctx, res, sessionID, EventToolResult, map[string]any{
+			st.done = append(st.done, call.ID)
+			l.emit(ctx, st, EventToolResult, map[string]any{
 				"call_id": call.ID, "tool": call.Name,
 				"outcome": string(out.Kind), "content": out.Content,
 				// 结果字节数（审计轨迹面：宿主落 tool 轨迹日志只记长度不记内容；
@@ -345,11 +391,11 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 				"bytes": len(out.Content),
 			})
 			if out.Kind == pipeline.KindUncertain {
-				res.Uncertain = append(res.Uncertain, call.ID)
+				st.res.Uncertain = append(st.res.Uncertain, call.ID)
 			}
 			// 回填与提交在同一段顺序代码里：崩溃窗口的两端各自自洽。
-			if err := l.commit(ctx, res, sessionID, messages, done, contract.StatusRunning); err != nil {
-				return res, err
+			if err := l.commit(ctx, st, contract.StatusRunning); err != nil {
+				return st.res, err
 			}
 		}
 		if stopped {
@@ -359,11 +405,11 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 
 	// 终态事件先于终态提交构造（Joint 模式下随快照原子落库；两步模式下
 	// 崩溃窗口从「终态事件丢失」换为「可对账的重复」——重复好于丢）。
-	l.emit(ctx, res, sessionID, EventSessionState, map[string]any{"status": res.Status})
-	if err := l.commit(ctx, res, sessionID, messages, done, res.Status); err != nil {
-		return res, err
+	l.emit(ctx, st, EventSessionState, map[string]any{"status": st.res.Status})
+	if err := l.commit(ctx, st, st.res.Status); err != nil {
+		return st.res, err
 	}
-	return res, nil
+	return st.res, nil
 }
 
 // loadHistory 读恢复点：历史 + 已完成工具调用。首次运行（ErrNotFound）
@@ -391,8 +437,6 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.S
 			return nil, nil, nil, errors.Wrap(err, "会话快照历史反序列化失败", "session", sessionID)
 		}
 	}
-	// 序号游标回灌：本次提交的序号必须从已持久化的最大值续起。
-	l.seq = snap.Seq
 	return &snap, messages, append([]string(nil), snap.Done...), nil
 }
 
@@ -408,24 +452,24 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.S
 // 「重跑该回合」，新一轮会重新产生事件；把上一批挂在 pendings 里等下一轮
 // 提交，等于把两轮的事件混进同一笔快照。失败即整批作废（数据面已回滚，
 // 事件面随之为空——同生共死）。
-func (l *Loop) commit(ctx context.Context, res *Result, sessionID string, messages []chat.Message, done []string, status string) error {
-	raw, err := json.Marshal(messages)
+func (l *Loop) commit(ctx context.Context, st *runState, status string) error {
+	raw, err := json.Marshal(st.messages)
 	if err != nil {
-		return errors.Wrap(err, "会话历史序列化失败", "session", sessionID)
+		return errors.Wrap(err, "会话历史序列化失败", "session", st.sessionID)
 	}
-	l.seq++
+	st.seq++
 	snap := checkpoint.Snapshot{
-		RunID:  sessionID,
-		Seq:    l.seq,
+		RunID:  st.sessionID,
+		Seq:    st.seq,
 		Status: status,
-		Done:   append([]string(nil), done...),
+		Done:   append([]string(nil), st.done...),
 		Fields: map[string]string{fieldHistory: string(raw)},
 	}
 	if l.cfg.Joint != nil {
-		events := l.pendings
-		l.pendings = nil
+		events := st.pendings
+		st.pendings = nil
 		if err := l.cfg.Joint.CommitWithEvents(ctx, snap, events); err != nil {
-			return errors.Wrap(err, "联合提交失败", "session", sessionID)
+			return errors.Wrap(err, "联合提交失败", "session", st.sessionID)
 		}
 		if l.cfg.Bus != nil {
 			for _, ev := range events {
@@ -435,12 +479,10 @@ func (l *Loop) commit(ctx context.Context, res *Result, sessionID string, messag
 		return nil
 	}
 	if err := l.committer.Commit(ctx, snap); err != nil {
-		return errors.Wrap(err, "进度快照落库失败", "session", sessionID)
+		return errors.Wrap(err, "进度快照落库失败", "session", st.sessionID)
 	}
 	return nil
-}
-
-// verifyHistory 历史完整性校验：assistant 的每个工具调用必须都有对应的
+} // verifyHistory 历史完整性校验：assistant 的每个工具调用必须都有对应的
 // tool 结果回填。不满足 = 存储里的历史不完整（崩溃窗口不会产出这种形态，
 // 出现即外部篡改/实现漂移），fail-closed。
 //
@@ -508,26 +550,24 @@ func (l *Loop) forceFinalPrompt() string {
 // OnEmitError 回调。
 //
 // ★ **流式增量不走这条路径**（见 emitDelta）：增量是观测面不是状态面。
-func (l *Loop) emit(ctx context.Context, res *Result, sessionID, typ string, payload map[string]any) {
+func (l *Loop) emit(ctx context.Context, st *runState, typ string, payload map[string]any) {
 	if l.cfg.Emitter == nil && l.cfg.Joint == nil {
 		return
 	}
 	if l.cfg.Joint != nil {
-		l.pendings = append(l.pendings, eventbus.Event{
-			SessionID: sessionID, Type: typ, Level: "info",
+		st.pendings = append(st.pendings, eventbus.Event{
+			SessionID: st.sessionID, Type: typ, Level: "info",
 			Payload: payload, OccurredAt: time.Now(),
 		})
 		return
 	}
-	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, typ, "info", payload); err != nil {
-		res.EmitFailed++
+	if err := l.cfg.Emitter.Publish(ctx, st.sessionID, "", nil, typ, "info", payload); err != nil {
+		st.res.EmitFailed++
 		if l.cfg.OnEmitError != nil {
 			l.cfg.OnEmitError(err)
 		}
 	}
-}
-
-// deltaPayload 把一片流式增量摊成事件载荷：kind/text 原样，带工具调用
+} // deltaPayload 把一片流式增量摊成事件载荷：kind/text 原样，带工具调用
 // 片段或计量片段时一并带上结构化字段。
 func deltaPayload(d chat.Delta) map[string]any {
 	payload := map[string]any{"kind": d.Kind, "text": d.Text}
@@ -560,11 +600,11 @@ func deltaPayload(d chat.Delta) map[string]any {
 //
 // 背压：总线广播是**非阻塞**的（订阅方缓冲满则丢弃并计数）⇒ 宿主 SSE 写慢
 // 不会反压模型流；片段因此可能丢——观测面允许丢，状态面不允许。
-func (l *Loop) emitDelta(ctx context.Context, res *Result, sessionID string, payload map[string]any) {
+func (l *Loop) emitDelta(ctx context.Context, st *runState, payload map[string]any) {
 	if l.cfg.Joint != nil {
 		if l.cfg.Bus != nil {
 			l.cfg.Bus.Broadcast(eventbus.Event{
-				SessionID: sessionID, Type: EventContentDelta,
+				SessionID: st.sessionID, Type: EventContentDelta,
 				Level: "info", Payload: payload, OccurredAt: time.Now(),
 			})
 		}
@@ -573,15 +613,13 @@ func (l *Loop) emitDelta(ctx context.Context, res *Result, sessionID string, pay
 	if l.cfg.Emitter == nil {
 		return
 	}
-	if err := l.cfg.Emitter.Publish(ctx, sessionID, "", nil, EventContentDelta, "info", payload); err != nil {
-		res.EmitFailed++
+	if err := l.cfg.Emitter.Publish(ctx, st.sessionID, "", nil, EventContentDelta, "info", payload); err != nil {
+		st.res.EmitFailed++
 		if l.cfg.OnEmitError != nil {
 			l.cfg.OnEmitError(err)
 		}
 	}
-}
-
-// busEmitter 把 eventbus.Broadcast 包成 Emitter（embedded 形态默认）。
+} // busEmitter 把 eventbus.Broadcast 包成 Emitter（embedded 形态默认）。
 type busEmitter struct{ bus *eventbus.Bus }
 
 func (e busEmitter) Publish(_ context.Context, sessionID, caseID string, stepID *uint64, typ, level string, payload map[string]any) error {

@@ -93,6 +93,39 @@ func newTestLoop(t *testing.T, m chat.Model, c *counter, budget roundguard.Budge
 	return l, mem
 }
 
+// TestNewRejectsApprovalToolWithoutGate 装配期 fail-closed：注册的工具声明了
+// 执行前人工审批却没有装配审批闸 ⇒ 直接拒绝装配。
+//
+// 闸缺失**不等于放行**：否则「审批闸没接上」会静默变成「无需审批」，
+// 副作用在无人批准的情况下施加——那是安全缺陷，不是配置便利。
+func TestNewRejectsApprovalToolWithoutGate(t *testing.T) {
+	mem := storage.NewMem()
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{
+		Name: "danger", Safe: true, Handler: (&counter{}).handler, NeedsApproval: true,
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	if _, err := agentloop.New(agentloop.Config{
+		Model: &fakeModel{errAt: -1},
+		Tools: pipe,
+		Store: mem.Checkpoints(),
+	}); err == nil {
+		t.Fatal("声明了审批的工具却无审批闸装配成功（审批会被绕过）")
+	}
+	// 装配了审批闸 ⇒ 允许装配。
+	if _, err := agentloop.New(agentloop.Config{
+		Model: &fakeModel{errAt: -1},
+		Tools: pipe,
+		Store: mem.Checkpoints(),
+		ApprovalGate: func(context.Context, string, chat.ToolCall) (agentloop.Approval, error) {
+			return agentloop.ApprovalApprove, nil
+		},
+	}); err != nil {
+		t.Fatalf("已装配审批闸却拒绝装配: %v", err)
+	}
+}
+
 func TestCompleteLoop(t *testing.T) {
 	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
 		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: "{}"}}},
@@ -460,6 +493,66 @@ func newGatedLoop(t *testing.T, m chat.Model, c *counter, budget roundguard.Budg
 		t.Fatalf("建循环失败: %v", err)
 	}
 	return l, mem
+}
+
+// argSpy 记录执行体收到的参数（审批恢复是否带回原始参数的证据）。
+type argSpy struct {
+	mu   sync.Mutex
+	args []string
+}
+
+func (s *argSpy) handler(_ context.Context, args []byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.args = append(s.args, string(args))
+	return "ok", nil
+}
+
+func (s *argSpy) last() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.args) == 0 {
+		return ""
+	}
+	return s.args[len(s.args)-1]
+}
+
+// TestApprovalSuspendResumeKeepsArguments 异步审批恢复必须带回**原始参数**。
+//
+// 用户批准的是「带参数的具体动作」（deploy 哪个目标、execute_sql 哪条语句）。
+// 若恢复时只重建 ID 与工具名，执行体收到空参数 ⇒ 施加的不是获批的那个动作。
+func TestApprovalSuspendResumeKeepsArguments(t *testing.T) {
+	const args = `{"target":"prod-1","mode":"apply"}`
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "call-1", Name: "calc", Arguments: args}}},
+		{Content: "续跑终答"},
+	}}
+	spy := &argSpy{}
+	g := &approvalGateSpy{decision: agentloop.ApprovalSuspend}
+	mem := storage.NewMem()
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{
+		Name: "calc", Safe: true, Handler: spy.handler, NeedsApproval: true,
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	l, err := agentloop.New(agentloop.Config{
+		Model: m, Tools: pipe, Store: mem.Checkpoints(),
+		Budget: roundguard.Budget{MaxRounds: 4}, ApprovalGate: g.gate,
+	})
+	if err != nil {
+		t.Fatalf("建循环失败: %v", err)
+	}
+
+	if _, err := l.Run(context.Background(), "sess-args", "开始"); err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	if _, err := l.Approve(context.Background(), "sess-args", "call-1", true); err != nil {
+		t.Fatalf("Approve 失败: %v", err)
+	}
+	if got := spy.last(); got != args {
+		t.Fatalf("批准后执行体必须收到获批的原始参数：got %q want %q", got, args)
+	}
 }
 
 // TestApprovalGateApproved 声明 NeedsApproval 的工具执行前过闸；批准 ⇒ 施加。

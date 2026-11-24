@@ -11,11 +11,42 @@ import (
 	"github.com/yi-nology/goagent-kernel/contract"
 	"github.com/yi-nology/goagent-kernel/eventbus"
 
+	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
 	"github.com/yi-nology/goagent-runtime/runtime"
 	"github.com/yi-nology/goagent-runtime/storage"
 )
+
+// TestNewEmbeddedRejectsApprovalToolWithoutGate 标准模板的审批闸装配判定：
+// 工具声明了 NeedsApproval 而宿主没装配审批闸 ⇒ 装配失败（不放行）。
+//
+// 判据在**装配期**，不在第一次执行时——事后拦截已经晚了（副作用已施加）。
+func TestNewEmbeddedRejectsApprovalToolWithoutGate(t *testing.T) {
+	tools := []pipeline.Tool{{
+		Name: "danger", Safe: true,
+		Handler:       func(context.Context, []byte) (string, error) { return "ok", nil },
+		NeedsApproval: true,
+	}}
+	if _, err := runtime.NewEmbedded(runtime.Config{
+		Model: &scriptedModel{},
+		Tools: tools,
+	}); err == nil {
+		t.Fatal("声明了审批的工具却无审批闸装配成功（审批会被绕过）")
+	}
+	// 装配了审批闸 ⇒ 允许装配。
+	rt, err := runtime.NewEmbedded(runtime.Config{
+		Model: &scriptedModel{},
+		Tools: tools,
+		ApprovalGate: func(context.Context, string, chat.ToolCall) (agentloop.Approval, error) {
+			return agentloop.ApprovalApprove, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("已装配审批闸却拒绝装配: %v", err)
+	}
+	_ = rt.Close()
+}
 
 // scriptedModel 脚本化模型（与 agentloop 测试同款，测试包独立各写一份）。
 type scriptedModel struct {

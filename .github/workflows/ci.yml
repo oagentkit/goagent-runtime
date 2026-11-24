@@ -23,6 +23,21 @@ jobs:
       - name: 依赖面门禁（纯判据包不得链数据库驱动）
         run: bash scripts/check-dep-edges.sh
 
+  race:
+    name: race（并发面竞态检测）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.4'
+      # ★ -race 在 Linux 上**强制要求 cgo**（CGO_ENABLED=0 直接报
+      #   「-race requires cgo」）⇒ 显式写 1，别让全局开关把它关掉。
+      # 本作业没有 PG service ⇒ PG 判据用例显式 skip（不伪造结果）。
+      - name: Race
+        run: CGO_ENABLED=1 go test -race ./... -count=1 -timeout 600s
+
   integration:
     name: integration（PG 参考实现：kernel 共享契约套件 + SIGKILL e2e）
     runs-on: ubuntu-24.04

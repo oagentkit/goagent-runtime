@@ -55,6 +55,12 @@ type Config struct {
 	Budget roundguard.Budget
 	// Observer 事件观测回调；nil = 不出事件给宿主。
 	Observer observe.Sink
+	// ApprovalGate 工具执行前的人工审批闸（宿主注入面）。
+	//
+	// ⚠️ 只要注册的工具里有声明 pipeline.Tool.NeedsApproval 的，这里**必须**
+	// 装配闸——否则装配直接失败（fail-closed）。装配层不提供「默认放行」
+	// 这条路：审批被静默绕过是安全缺陷。
+	ApprovalGate agentloop.ApprovalGateFunc
 }
 
 // Runtime 装配完成的运行时。
@@ -186,14 +192,15 @@ func assemble(cfg Config, opts []Option, prep func(*assembly) error, closeFn fun
 		return nil, err
 	}
 	loop, err := agentloop.New(agentloop.Config{
-		Model:   cfg.Model,
-		Tools:   pipe,
-		Store:   a.storage.Checkpoints(),
-		Emitter: emitter,
-		Joint:   joint,
-		Bus:     rt.loopBus,
-		Budget:  cfg.Budget,
-		System:  cfg.System,
+		Model:        cfg.Model,
+		Tools:        pipe,
+		Store:        a.storage.Checkpoints(),
+		Emitter:      emitter,
+		Joint:        joint,
+		Bus:          rt.loopBus,
+		Budget:       cfg.Budget,
+		System:       cfg.System,
+		ApprovalGate: cfg.ApprovalGate,
 	})
 	if err != nil {
 		rt.stop()
