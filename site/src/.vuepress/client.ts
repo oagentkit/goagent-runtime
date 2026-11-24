@@ -1,4 +1,5 @@
 import { defineClientConfig } from 'vuepress/client'
+import type { Router, RouterScrollBehavior } from 'vue-router'
 import Mermaid from './components/Mermaid.vue'
 import ArchDiagram from './components/ArchDiagram.vue'
 import { MERMAID_IDLE_EVENT } from './mermaid-events'
@@ -97,20 +98,18 @@ function alignTick(): void {
   }
 
   const el = hashTarget()
-  let inPlace = false
   if (el) {
     const want = targetOffset(el)
     const top = el.getBoundingClientRect().top
-    inPlace = Math.abs(top - want) <= 2
-    if (!inPlace) scrollTargetTo(el)
+    // 目标不在位 ⇒ 拉过去。**不在位就拉**是这里唯一要守的判据：
+    // 「已在位就收工」会栽在「内容后来才长高」上——收工那一刻目标确实在位
+    // （按旧布局算的），等图渲染完它就被顶走了，却没人再校正。
+    if (Math.abs(top - want) > 2) scrollTargetTo(el)
   }
 
-  // 「稳了」= 滚动位置连续静止 2 秒 且 目标已在位。
-  if (inPlace && alignStill >= ALIGN_STILL_TICKS) return
-  if (Date.now() >= alignDeadline) {
-    alignDeadline = Date.now() + ALIGN_MAX_MS
-    alignStill = 0
-  }
+  // 窗口内持续复查（默认 8 秒）：内容什么时候长完是不确定的，
+  // 与其猜一个「该稳了」的时机，不如在窗口内一直盯着。
+  if (Date.now() >= alignDeadline) return
   alignTimer = window.setTimeout(alignTick, ALIGN_TICK_MS)
 }
 
@@ -196,5 +195,29 @@ export default defineClientConfig({
   enhance({ app }) {
     app.component('Mermaid', Mermaid)
     app.component('ArchDiagram', ArchDiagram)
+
+    // 接管 hash 定位：框架自己的 scrollBehavior 用**陈旧布局**算目标位置。
+    //
+    // 实测（recovery 页）：框架在内容还没长完时算出的目标是 `top: 76`——
+    // 那是元素文档位置还只有 146 时的值；等三张图渲染完，元素真实文档位置
+    // 变成 1277，框架那次滚动仍把页面按旧值落下 ⇒ 锚点偏出 577px，而且它
+    // 是在**平滑动画**里落地的 ⇒ 观感就是「抖」。
+    //
+    // 所以这里让框架**不要管 hash 定位**（返回 false ⇒ vue-router 不滚），
+    // 全部交给上面的对齐循环：它按**此刻**的真实布局数值化地滚，一步到位。
+    // 非 hash 的导航仍走框架原本的行为。
+    const router = (
+      app.config.globalProperties as unknown as { $router?: Router }
+    ).$router
+    if (router) {
+      const prev = router.options.scrollBehavior
+      const next: RouterScrollBehavior = (to, from, savedPosition) => {
+        if (savedPosition) return savedPosition
+        if (to.hash) return false // hash 定位 ⇒ 对齐循环接管
+        return prev ? prev(to, from, savedPosition) : { left: 0, top: 0 }
+      }
+      router.options.scrollBehavior = next
+      router.scrollBehavior = next
+    }
   },
 })
