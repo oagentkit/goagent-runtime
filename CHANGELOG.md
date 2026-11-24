@@ -2,6 +2,102 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.2] — 2026-11-24
+
+### 新增(agentloop)：tool_call 事件补结果字节数（审计轨迹面）
+
+执行轮 EventToolCall payload 增加 bytes=len(result.Content)——宿主落
+工具轨迹日志只记长度不记内容的既有纪律需要该维度；审批拒绝等无结果
+的调用轮不带本键（桥接方按缺省处理）。判据：counter 返回 "ok" →
+bytes=2 断言。
+
+### 新增(make)：真集群验收入口随判据体落到本仓（#418 的可复跑入口）
+
+判据体随边界从 goagent-kernel 迁到本仓，可复跑入口（make k8s-e2e）一并搬过来——kernel 侧那个目标指向已删目录，是悬空入口（跑必失败，且让人误以为该路径在那个仓可跑），已撤。站点生成页随新目标重生成。
+
+### 新增(chat)：#11 收口——承载面扩展（工具片段+usage）+ 框架归并器 + Joint 模式 delta 实时
+
+#11 的验收标准是「流式宿主不再写聚合桥」。v0.6.0 的 OnDelta 只搬走了
+「逐片投递」，**归并**（按 Index 归并工具调用、usage 累计）仍留在每个
+宿主手里——各写各的、各踩各的坑。本笔把那段收进框架。
+① 承载面（chat/chat.go）：Delta 增加可选的 ToolCall 片段与 Usage 计量
+   （可选字段 ⇒ chat.Model 契约一字未改，非流式宿主零改动）。
+② 归并器（chat/stream.go）：DeltaAggregator 按 Index 归并工具调用、累计
+   usage、拼接文本——**唯一一份**实现，宿主用它拼响应。
+③ loop 接线（agentloop/loop.go）：
+   - 挂载条件从「Emitter 非 nil」放宽为「Emitter 或 Joint 非 nil」——
+     此前事件随快照落库的形态（standalone/cluster）里流式增量静默消失；
+   - Joint 形态下增量**只即时广播、不落事件行**（观测面 ≠ 状态面：落进去
+     会污染状态面，也会打破「一轮四事件」判据）；
+   - 修正一处说谎的注释：联合提交失败时本批事件**作废**（不是「保留待下轮
+     重试」——重试是重跑该回合，把上一批挂着等下一轮提交等于混两轮事件）。
+④ 判据：chat 包从零测试到 6 条（归并/usage/文本/非法 Index 丢弃/词表）；
+   agentloop 新增 Joint 形态用例（逐片广播 + 不落事件行 + 状态面四事件
+   不受增量影响）。
+⑤ 文面：站点 chat.md 的**过期签名**改正（Chat(ctx, messages, tools)
+   (*Response, error) / Response / ToolDecl 全都不存在），依赖图改正
+   （chat 零外部依赖）；补流式旁路段；README 补「流式模型」小节；
+   新增 ADR-0009（形态取舍：不采纳拉取式 Streamer 的理由）与 ADR-0008。
+本地校验：make check 全绿；site build 33 页、链接门禁 32 页全过。
+
+### 修复(storage)：#10/#12 收口——判据面零驱动边（门禁化）+ 驱动名选型红线 + ADR-0007
+
+#10 的代码拆分已由 cf60a3f 落地，但**纪律没有落地**：同形面可再生、
+对账表自己漏报、文档零提示。本笔把三处补齐。
+① 机器判据（新增 scripts/check-dep-edges.sh + make deps + CI 作业）
+   纯判据包（storage）的生产依赖面与测试依赖面都不得出现数据库驱动；
+   go list 跑不起来同样判红（判据跑不起来不许报绿）。
+   反向验证：往 storage 注入 import _ "modernc.org/sqlite" ⇒ 判红退出 1。
+② 判据面盲区（站点生成器）
+   listDiskPackages 原来只扫顶层目录 ⇒ 嵌套子包（storage/sqlitestore）
+   对它隐形 ⇒「README 包表 ⇄ 磁盘目录」那张对账表自己在漏报。
+   改为递归下钻；自测 13 → 17 条；反向验证：去掉递归 ⇒ 3 条判红。
+③ 选型红线（#12）
+   README「SQLite 驱动名约束」+ sqliteadapter 包文档：驱动名 "sqlite"
+   是进程级全局注册表，同名第二次注册 init 即 panic；给出去路
+   （只要内存面就只 import storage）与排查线索。
+另：README「包」表补 adjudicate 与 storage/sqlitestore（对账 1 处漂移 → 0 处）；
+触驱动的测试迁到绑定包（storage 的测试依赖面也归零），新包补判据——三面齐备 /
+空路径 fail-fast / **直接实现 storage.JointCommitter**（只给 AsJoint 转发器时
+runtime 装配的能力断言恒 false ⇒ 静默落回两步提交路径）；新增 ADR-0007 + 索引。
+本地校验：make check 全绿（vet + 全量测试 + 依赖面门禁）；site build 31 页全过。
+
+- 杂务(release)：补 v0.6.1 版本段（tag 已打）+ 站点生成物跟平
+
+v0.6.1 tag 已打但 CHANGELOG.md 缺该版本段 ⇒ CI「CHANGELOG 同步校验」判红；
+cf60a3f 的 storage 拆分改了包表 ⇒ 站点「机器事实」页与 llms.txt 的行数快照失效 ⇒
+CI「站点构建」判红。两条都是生成物滞后，按纪律重跑生成器跟平（未手改生成物）：
+- CHANGELOG.md（家族工具 gen_changelogs.py，10 个版本段）
+- site/src/reference/{packages,releases}.md、site/src/.vuepress/public/llms.txt
+本地校验：gen_changelogs.py --check ⇒ 覆盖完整；gen_reference_pages.mjs --check ⇒
+OK：13 个生成产物与仓库事实同步；check:links ⇒ 29 个页面全过。
+
+
+- 格式：收掉 main 上既存的 gofmt 漂移（7 个文件 / 10 行，零行为变化）
+
+这些漂移从初版提交起就在（CI 只跑 vet，不跑 gofmt ⇒ 一直漏过）：
+注释缩进（`//（...` → `// (...`）与结构体字段对齐。纯格式，无行为变化。
+本机校验：go build ./... 与 go vet ./... 全绿；gofmt -l 全仓为空。
+
+
+- 测试(pgstore,cluster,storage)：#9 判据收口——PG 一轮四事件装配端到端 + 反向原子性（两侧形态）
+
+#9 的验收判据两条：① 原子性直证（联合提交失败 ⇒ 事件行零落）；② Joint 装配
+端到端（一轮四事件）。核验发现两处缺口：① 只证了「快照 CAS 先失败」一个
+方向（另一半「事件面失败 ⇒ 快照行不落」两侧都缺）；② 「一轮四事件」只有
+SQLite 形态有断言，**PG 侧完全空白** ⇒ cluster 走联合提交这条路径无任何
+断言保护（哪天静默落回两步路径，没有用例会红）。
+① 反向原子性（两侧形态各一条）：注入一个不可序列化的 payload（函数值）⇒
+   事件面必失败 ⇒ 断言快照行**读不出来**且事件行零落。
+   用例：storage/sqlitestore/joint_test.go、pgstore/joint_test.go。
+② PG 侧一轮四事件（装配端到端）：cluster 跑一轮（两轮：请求工具 + 终答）
+   ⇒ 断言事件面里 2×round_start + tool_call + session_state。
+   用例：cluster/pg_cluster_test.go（真 PG）。
+本机实跑：真 PostgreSQL 16（docker 容器 gak-cluster-pg）下 pgstore 与
+cluster 全绿；make check 全绿；site build 33 页。ADR-0008 补记：两条判据
+现在两侧形态都齐。
+
+
 ## [v0.6.1] — 2026-11-23
 
 ### 重构(storage)：storage 纯化拆分——sqlite.go 移 storage/sqlitestore（modernc 驱动边不进纯化包；bianque 双 driver 注册 panic 实弹）+ *SQLite 补 CommitWithEvents 转发（批662 assemble 能力断言恒 false 缺口）+ 检测回归钉

@@ -11,6 +11,7 @@ title: 版本记录
 
 | 版本 | 日期 | 主题 |
 |---|---|---|
+| `v0.6.2` | 2026-11-24 | 新增(agentloop)：tool_call 事件补结果字节数（审计轨迹面） |
 | `v0.6.1` | 2026-11-23 | 重构(storage)：storage 纯化拆分——sqlite.go 移 storage/sqlitestore（modernc 驱动边不进纯化包；bianque 双 driver 注册 panic 实弹）+ *SQLite 补 CommitWithEvents 转发（批662 assemble 能力断言恒 false 缺口）+ 检测回归钉 |
 | `v0.6.0` | 2026-11-23 | 新增(chat)：流式增量回调 OnDelta + agentloop content_delta 事件 |
 | `v0.5.1` | 2026-11-23 | 新增(adjudicate)：逐项观测钩子 Observer + ErrNotUncertain 并发分类 |
