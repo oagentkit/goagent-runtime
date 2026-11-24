@@ -20,7 +20,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | 包 | 生产文件 | 生产行数 | 仓外依赖 | 职责 | 职责来源 |
 |---|---|---|---|---|---|
 | `adjudicate` | 1 | 234 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 副作用未知态的周期裁决（证据回查 → 三态判定 → 落裁决；#1） | README 包表 |
-| `agentloop` | 3 | 691 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | README 包表 |
+| `agentloop` | 3 | 694 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | README 包表 |
 | `chat` | 2 | 216 | 无 | 供应商中立的模型窄接口与消息类型 | README 包表 |
 | `cluster` | 2 | 532 | `github.com/jackc/pgx/v5`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） | README 包表 |
 | `containerbackend` | 10 | 2112 | `github.com/oagentkit/guardx`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** | README 包表 |

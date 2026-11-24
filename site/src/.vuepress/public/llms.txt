@@ -41,7 +41,7 @@
 
 ## 事实快照
 - 模块: `github.com/yi-nology/goagent-runtime` · Go `1.27.4` · MIT
-- 能力包 12 个（生产代码 12189 行 / 64 个文件）
+- 能力包 12 个（生产代码 12192 行 / 64 个文件）
 - kernel 地板版本: `v0.66.1`；判据全部来自 kernel 契约面
 - 第一方依赖 6 个（直接）/ 15 个（间接）
 - 模板: `NewEmbedded`（内存）/ `NewStandalone`（SQLite 单文件）/ `cluster`（PG + worker 池，多副本）
