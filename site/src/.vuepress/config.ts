@@ -64,6 +64,23 @@ export default defineUserConfig({
         '@theme/VPToggleColorModeButton.vue': path.resolve(here, './components/ThemeModeSwitch.vue'),
       },
     },
+    {
+      // 锚点落位偏移 ↔ 框架「当前章节」判定对齐（详见 client.ts 顶部注释）。
+      //
+      // 主题的 active-header-links 插件用 __AHL_OFFSET__（默认 5）判定「当前所在
+      // 章节」：章节起点 = 该标题的 offsetTop。而我们的落位把标题放在**导航栏
+      // 下方**（scroll-margin-top = 导航栏高 58 + 余量 12 = 70px）⇒ 落位点落在
+      // **上一节**里 ⇒ 插件立刻把地址栏的 hash 改写成上一节 ⇒ 深链的锚点被抹掉。
+      //
+      // 这里把该常量调到 ≥ 落位偏移（取 120，留余量），插件的章节边界就与落位
+      // 口径一致 ⇒ 地址栏的 hash 停在读者要的锚点上（侧栏高亮也跟着对）。
+      //
+      // 为什么是覆盖常量而不是改插件选项：主题只把该插件的**开关**暴露成
+      // themePlugins（选项写死在主题里，改不了 offset）⇒ 只能覆盖它编译期读的
+      // 常量（define 由 bundler 替换）。
+      name: 'runtime-anchor-offset',
+      define: { __AHL_OFFSET__: 120 },
+    },
   ],
   theme: defaultTheme({
     logo: null,
