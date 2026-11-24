@@ -319,6 +319,9 @@ func (l *Loop) drive(ctx context.Context, sessionID string, messages []chat.Mess
 			done = append(done, call.ID)
 			l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
 				"call_id": call.ID, "tool": call.Name, "outcome": string(out.Kind),
+				// 结果字节数（审计轨迹面：宿主落 tool 轨迹日志只记长度不记内容）；
+				// 审批拒绝等无结果的调用轮不带本键。
+				"bytes": len(out.Content),
 			})
 			if out.Kind == pipeline.KindUncertain {
 				res.Uncertain = append(res.Uncertain, call.ID)

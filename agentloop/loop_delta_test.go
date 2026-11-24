@@ -156,3 +156,41 @@ func TestContentDeltaNoEmitter(t *testing.T) {
 		t.Fatal("无观测面时 OnDelta 不应挂载")
 	}
 }
+
+// TestToolCallPayloadCarriesBytes 执行轮 tool_call 事件带结果字节数（宿主
+// 审计轨迹面：只记长度不记内容）；counter handler 返回 "ok" → bytes=2。
+func TestToolCallPayloadCarriesBytes(t *testing.T) {
+	m := &fakeModel{errAt: -1, script: []chat.ChatResponse{
+		{ToolCalls: []chat.ToolCall{{ID: "c1", Name: "calc", Arguments: "{}"}}},
+		{Content: "done"},
+	}}
+	c := &counter{}
+	mem := storage.NewMem()
+	pipe, err := pipeline.New(mem.Effects(), time.Minute, []pipeline.Tool{{
+		Name: "calc", Safe: true, Handler: c.handler,
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+	emu := &captureEmitter{}
+	l, err := agentloop.New(agentloop.Config{
+		Model: m, Tools: pipe, Store: mem.Checkpoints(), Emitter: emu,
+	})
+	if err != nil {
+		t.Fatalf("建循环失败: %v", err)
+	}
+	if _, err := l.Run(context.Background(), "sess-bytes", "算一下"); err != nil {
+		t.Fatalf("Run 失败: %v", err)
+	}
+	var toolPayloads []map[string]any
+	for _, p := range emu.payloadsOf(agentloop.EventToolCall) {
+		toolPayloads = append(toolPayloads, p)
+	}
+	if len(toolPayloads) != 1 {
+		t.Fatalf("应恰一条执行轮 tool_call: %+v", toolPayloads)
+	}
+	p := toolPayloads[0]
+	if p["tool"] != "calc" || p["bytes"] != 2 {
+		t.Fatalf("payload 应含 tool=calc/bytes=2: %+v", p)
+	}
+}
