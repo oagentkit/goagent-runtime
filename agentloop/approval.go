@@ -14,7 +14,6 @@ import (
 	"github.com/oekit/pkg/errors"
 
 	"github.com/yi-nology/goagent-kernel/contract"
-	"github.com/yi-nology/goagent-kernel/roundguard"
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
@@ -37,6 +36,14 @@ const (
 	// 落决策再续跑。未知决策值同义保守挂起（fail-closed 方向）。
 	ApprovalSuspend Approval = "suspend"
 )
+
+// ApprovalGateFunc 工具执行前的人工审批闸（宿主注入面）。
+//
+// 三态决策：ApprovalApprove 直通执行；ApprovalDeny 拒绝（副作用不施加，
+// 以工具观察回喂模型）；ApprovalSuspend 挂起（提交 awaiting 快照后 Run
+// 返回，宿主离线收集决策后经 Approve 落决策续跑）。err ≠ nil ⇒ fail-closed
+// 本轮失败上抛（闸失败 = 无法证明获准）。
+type ApprovalGateFunc func(ctx context.Context, sessionID string, call chat.ToolCall) (Approval, error)
 
 // denyObservation 拒绝时回喂模型的工具观察文本。
 const denyObservation = "工具调用被人工审批拒绝，副作用未施加；请调整方案或改用其他工具。"
@@ -79,6 +86,28 @@ func toolNameOf(messages []chat.Message, callID string) string {
 	return ""
 }
 
+// pendingToolCall 找历史里 callID 对应的**完整**工具调用（含参数）。
+//
+// 为什么必须连参数一起取回：用户批准的是「带参数的具体动作」（deploy 哪个
+// 目标、execute_sql 哪条语句、delete 哪个资源）。只取回 ID 与工具名 ⇒
+// 执行体收到**空参数** ⇒ 施加的根本不是获批的那个动作（审批与执行脱钩）。
+//
+// 取回的是**快照里的原样调用**（快照由存储侧 CAS 保护、历史完整性有
+// verifyHistory 把关）⇒ 执行的就是用户看到并批准的那次调用。
+func pendingToolCall(messages []chat.Message, callID string) (chat.ToolCall, bool) {
+	for _, m := range messages {
+		if m.Role != chat.RoleAssistant {
+			continue
+		}
+		for _, c := range m.ToolCalls {
+			if c.ID == callID {
+				return c, true
+			}
+		}
+	}
+	return chat.ToolCall{}, false
+}
+
 // Approve 落审批决策并续跑挂起中的会话。
 //
 // approved=true ⇒ 挂起的调用走标准施加面执行（幂等闸/租约/重试语义与
@@ -104,44 +133,47 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 		return nil, errors.Newf("callID 不匹配挂起调用: 挂起=%s 传入=%s", pending, callID)
 	}
 
-	used := roundguard.Used{Tools: map[string]int{}}
-	res := &Result{Status: contract.StatusRunning}
+	st := newRunState(sessionID, messages, done, snap)
+	res := st.res
 	if approved {
-		name := toolNameOf(messages, pending)
-		if name == "" {
-			return nil, errors.Newf("挂起调用在历史里找不到工具名: %s", pending)
+		// 恢复**完整**调用（含参数）：获批的是带参数的具体动作，只恢复
+		// ID+工具名会让执行体收到空参数（施加的不是获批的动作）。
+		call, found := pendingToolCall(messages, pending)
+		if !found {
+			return nil, errors.Newf("挂起调用在历史里找不到: %s", pending)
 		}
-		out := l.cfg.Tools.Execute(ctx, sessionID, chat.ToolCall{ID: pending, Name: name})
-		used.ToolCalls++
-		used.Tools[name]++
-		res.ToolCalls = used.ToolCalls
-		messages = append(messages, chat.Message{
+		name := call.Name
+		out := l.cfg.Tools.Execute(ctx, sessionID, call)
+		st.used.ToolCalls++
+		st.used.Tools[name]++
+		res.ToolCalls = st.used.ToolCalls
+		st.messages = append(st.messages, chat.Message{
 			Role:       chat.RoleTool,
 			Content:    out.Content,
 			ToolCallID: pending,
 		})
-		done = append(done, pending)
-		l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+		st.done = append(st.done, pending)
+		l.emit(ctx, st, EventToolCall, map[string]any{
 			"call_id": pending, "tool": name, "outcome": string(out.Kind),
 		})
 		if out.Kind == pipeline.KindUncertain {
 			res.Uncertain = append(res.Uncertain, pending)
 		}
 	} else {
-		messages = append(messages, chat.Message{
+		st.messages = append(st.messages, chat.Message{
 			Role:       chat.RoleTool,
 			Content:    denyObservation,
 			ToolCallID: pending,
 		})
-		done = append(done, pending)
-		l.emit(ctx, res, sessionID, EventToolCall, map[string]any{
+		st.done = append(st.done, pending)
+		l.emit(ctx, st, EventToolCall, map[string]any{
 			"call_id": pending, "tool": toolNameOf(messages, pending), "outcome": "approval_denied",
 		})
 	}
 
 	// 决策与回填同段提交（挂起恢复窗口的两端各自自洽），接主驱动循环续跑。
-	if err := l.commit(ctx, res, sessionID, messages, done, contract.StatusRunning); err != nil {
+	if err := l.commit(ctx, st, contract.StatusRunning); err != nil {
 		return res, err
 	}
-	return l.drive(ctx, sessionID, messages, done, used, res)
+	return l.drive(ctx, st)
 }

@@ -107,6 +107,12 @@ type Config struct {
 	Budget roundguard.Budget
 	// Observer 事件观测回调；nil = 不出事件给宿主。
 	Observer observe.Sink
+	// ApprovalGate 工具执行前的人工审批闸（宿主注入面）。
+	//
+	// ⚠️ 只要注册的工具里有声明 pipeline.Tool.NeedsApproval 的，这里**必须**
+	// 装配闸——否则集群启动直接失败（fail-closed）。装配层不提供「默认放行」
+	// 这条路：审批被静默绕过是安全缺陷。
+	ApprovalGate agentloop.ApprovalGateFunc
 	// Workers worker 池大小；零值 = DefaultWorkers。
 	Workers int
 	// LeaseTTL 认领租约有效期；零值 = DefaultLeaseTTL。
@@ -134,6 +140,16 @@ type Cluster struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	closed  bool
+
+	// mu 保护 baselines（等待起点登记表）。
+	mu sync.Mutex
+	// baselines 会话 → 本次**投递前**的事件面水位线（等待起点）。
+	//
+	// 为什么需要它：结果事件按 sessionID 过滤，而 sessionID 是**长期会话
+	// 身份**——同一会话的第 2 轮与第 1 轮共用一个 ID。等待方若从事件流开头
+	// 扫，会先撞上第 1 轮的结果并立刻返回（拿到的不是本轮结果）。
+	// 投递前记下的水位线把「上一轮的结果」挡在起点之外。
+	baselines map[string]uint64
 }
 
 // New 装配集群模板：连 PG → 建表（幂等）→ 打开各存储面。
@@ -169,13 +185,14 @@ func New(ctx context.Context, cfg Config, dsn string) (*Cluster, error) {
 	}
 	store := pgstore.NewStore(pool)
 	c := &Cluster{
-		cfg:     cfg,
-		pool:    pool,
-		store:   store,
-		board:   store.Board(),
-		events:  store.Events(),
-		bus:     eventbus.New(),
-		agentID: taskboard.AgentID("cluster-" + randomID()),
+		cfg:       cfg,
+		pool:      pool,
+		store:     store,
+		board:     store.Board(),
+		events:    store.Events(),
+		bus:       eventbus.New(),
+		agentID:   taskboard.AgentID("cluster-" + randomID()),
+		baselines: map[string]uint64{},
 	}
 	return c, nil
 }
@@ -210,15 +227,41 @@ func (c *Cluster) Events() *pgstore.EventStore { return c.events }
 func (c *Cluster) Effects() *pgstore.EffectStore { return c.store.Effects() }
 
 // Submit 投递一次待执行的会话（同 sessionID 再次投递 = 同一会话的下一轮）。
+//
+// 投递**前**记下事件面水位线（等待起点）：本轮的结果事件必然在它之后
+// （事件 ID 单调无空洞）⇒ 等待方从这条线往后取，不会把上一轮的结果当成
+// 本轮的返回。
 func (c *Cluster) Submit(ctx context.Context, sessionID, user string) error {
 	if sessionID == "" {
 		return errors.New("cluster: 会话 ID 不能为空")
 	}
-	return c.board.Submit(ctx, taskboard.Task{
+	base, err := c.events.MaxID(ctx)
+	if err != nil {
+		return errors.Wrap(err, "cluster: 读事件面水位线失败", "session", sessionID)
+	}
+	if err := c.board.Submit(ctx, taskboard.Task{
 		ID:    taskboard.TaskID(sessionID),
 		Title: user,
 		State: taskboard.StateOpen,
-	})
+	}); err != nil {
+		return err
+	}
+	c.setBaseline(sessionID, base)
+	return nil
+}
+
+// setBaseline 登记会话的等待起点。
+func (c *Cluster) setBaseline(sessionID string, cursor uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.baselines[sessionID] = cursor
+}
+
+// baseline 取会话的等待起点；未登记过 = 0（从事件流开头找）。
+func (c *Cluster) baseline(sessionID string) uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.baselines[sessionID]
 }
 
 // Run 投递并等待结果（同步语义：内部 = Submit + Wait）。
@@ -231,13 +274,29 @@ func (c *Cluster) Run(ctx context.Context, sessionID, user string) (*agentloop.R
 
 // Wait 等待某会话的执行结果（结果经事件面回传）。
 //
+// 起点 = 本会话本次投递前的水位线（见 Submit）：上一轮的结果在起点之前，
+// 不会被当成这一轮的返回。
+//
 // 超时口径：ctx 取消 ⇒ 返回 ctx.Err()；到达 WaitTimeout ⇒ ErrWaitTimeout。
 func (c *Cluster) Wait(ctx context.Context, sessionID string) (*agentloop.Result, error) {
+	return c.WaitSince(ctx, sessionID, c.baseline(sessionID))
+}
+
+// ResultCursor 返回当前事件面水位线（等待起点）。
+//
+// 跨副本等待用：本副本投递、另一副本等待时，把这个游标交给 WaitSince
+// （另一副本没有本会话的投递记录，取不到起点）。
+func (c *Cluster) ResultCursor(ctx context.Context) (uint64, error) {
+	return c.events.MaxID(ctx)
+}
+
+// WaitSince 从 since 之后的事件里等本会话的结果（跨副本等待用）。
+func (c *Cluster) WaitSince(ctx context.Context, sessionID string, since uint64) (*agentloop.Result, error) {
 	if sessionID == "" {
 		return nil, errors.New("cluster: 等待结果的会话 ID 不能为空")
 	}
 	deadline := time.Now().Add(c.cfg.WaitTimeout)
-	cursor := uint64(0)
+	cursor := since
 	for {
 		evs, err := c.events.ListAfter(ctx, cursor, 200)
 		if err != nil {

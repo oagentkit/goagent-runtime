@@ -15,6 +15,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/observe"
+	"github.com/yi-nology/goagent-runtime/pgstore"
 	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
@@ -50,12 +51,13 @@ func (c *Cluster) Start(ctx context.Context) error {
 		// 提交承担，本副本不广播——Observer 的事件流走 forwardEvents 从 PG
 		// 事件面统一转发（Joint 提交后事件已在 PG，转发语义不变）。
 		loop, err := agentloop.New(agentloop.Config{
-			Model:  c.cfg.Model,
-			Tools:  pipe,
-			Store:  c.store.Snapshots(),
-			Joint:  c.store,
-			Budget: c.cfg.Budget,
-			System: c.cfg.System,
+			Model:        c.cfg.Model,
+			Tools:        pipe,
+			Store:        c.store.Snapshots(),
+			Joint:        c.store,
+			Budget:       c.cfg.Budget,
+			System:       c.cfg.System,
+			ApprovalGate: c.cfg.ApprovalGate,
 		})
 		if err != nil {
 			cancel()
@@ -158,20 +160,34 @@ func (c *Cluster) execute(ctx context.Context, w *executor, task taskboard.Task)
 		return
 	}
 
-	// 结果回传：写事件面（先写结果再收场——反过来会丢结果）。
+	// 结果回传 + 任务收场：**同一事务**（pgstore.Finish）。
+	//
+	// 为什么必须同事务（分开写会留半截状态）：
+	//
+	//   - 事件写失败、任务仍被完成 ⇒ 任务已是终态，等待方永远等不到结果；
+	//   - 事件写成功、任务完成失败（租约已被接管）⇒ 旧执行者的结果对外可见，
+	//     等待方可能拿到过期执行者的结论。
+	//
+	// ⇒ 任一失败整批回滚：任务保持可恢复状态（租约到期后由别的副本接管
+	// 重跑；幂等闸保证已施加的副作用不会被第二次施加）。
 	payload, err := encodeResult(res)
-	if err == nil {
-		_, _ = c.events.Insert(ctx, eventbus.Event{
+	if err != nil {
+		// 结果编码失败（不该发生）：归还任务，让别的副本接手。
+		_ = c.board.Release(ctx, task.ID, lease.Token())
+		return
+	}
+	if err := c.store.Finish(ctx, pgstore.FinishRequest{
+		TaskID: task.ID,
+		Token:  lease.Token(),
+		Event: eventbus.Event{
 			SessionID:  string(task.ID),
 			Type:       ResultEventType,
 			Level:      "info",
 			Payload:    payload,
 			OccurredAt: time.Now(),
-		})
-	}
-	if err := c.board.Complete(ctx, task.ID, lease.Token()); err != nil {
-		// 完成失败（多半是租约已被接管）：任务会被别的副本接手重跑；
-		// 幂等闸保证已施加的副作用不会被第二次施加。
+		},
+	}); err != nil {
+		// 收尾失败（整批已回滚）：任务保持可恢复状态，等接管重跑。
 		return
 	}
 }

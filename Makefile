@@ -1,4 +1,4 @@
-.PHONY: check test vet build demo deps
+.PHONY: check test vet build demo deps race
 
 check: vet test deps
 
@@ -7,6 +7,17 @@ vet:
 
 test:
 	go test ./... -count=1 -timeout 120s
+
+# 竞态门禁：并发面（快照序号、事件缓冲、共享 map）必须过竞态检测。
+#
+# ★ -race 在 Linux 上**强制要求 cgo**（CGO_ENABLED=0 会直接报
+#   「-race requires cgo」）⇒ 这里显式写 CGO_ENABLED=1，别让全局开关
+#   把它关掉（那会让本机绿、CI 红的最难查形态）。
+#
+# 为什么单独一个目标而不是 test 里带 -race：PG 判据套件在 -race 下慢得多，
+# 且竞态判据要能**单独复跑**（怀疑竞态时先跑这一条）。
+race:
+	CGO_ENABLED=1 go test -race ./... -count=1 -timeout 600s
 
 build:
 	CGO_ENABLED=0 go build ./...

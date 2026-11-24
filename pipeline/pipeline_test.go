@@ -144,8 +144,89 @@ func TestDuplicateNameRejected(t *testing.T) {
 	}
 }
 
+// TestContendedIsExplicitOutcomeNotPanic 资源被他人**活持有**时，闸判的是
+// 「可重试的拒绝」（kernel sideeffect：OutcomeContended + **nil error**）——
+// 它是正常判据之一，不是异常。
+//
+// 装配层必须把它落成明确结论（可重试的暂不可执行），而不是对 nil error
+// 调 Error()（空指针 Panic）。多副本下资源竞争是常态，不是罕见路径。
+func TestContendedIsExplicitOutcomeNotPanic(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	p, err := pipeline.New(storage.NewMem().Effects(), time.Minute, []pipeline.Tool{{
+		Name: "calc",
+		Handler: func(_ context.Context, _ []byte) (string, error) {
+			close(started)
+			<-release
+			return "ok", nil
+		},
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+
+	firstDone := make(chan pipeline.Outcome, 1)
+	go func() {
+		firstDone <- p.Execute(context.Background(), "s1", chat.ToolCall{ID: "call-1", Name: "calc"})
+	}()
+	<-started // 第一个执行体已持住资源闸（租约未过期）
+
+	// 第二个执行撞上活持有 ⇒ 闸判 Contended（无 error）。
+	var out pipeline.Outcome
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("资源竞争不得 Panic（Contended 是正常判据，不是异常）: %v", r)
+			}
+		}()
+		out = p.Execute(context.Background(), "s1", chat.ToolCall{ID: "call-2", Name: "calc"})
+	}()
+
+	if out.Kind != pipeline.KindContended {
+		t.Fatalf("资源被活持有应为 contended（本次未施加），got %s（%s）", out.Kind, out.Content)
+	}
+	if out.Content == "" {
+		t.Fatal("contended 必须带明确结论文本（回喂模型时要说明未施加）")
+	}
+
+	close(release)
+	<-firstDone
+}
+
 var errBoom = errorString("boom")
 
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
+
+// TestBusinessIdempotencyKeyAcrossSessionsIsReplayed 业务幂等键的跨会话语义：
+// 同一业务动作换个会话重试 ⇒ 闸判 **replayed**（取回既有结果），而不是
+// 「同 Key 异 Resource」的动作身份冲突（ErrActionConflict ⇒ 判 failed）。
+//
+// 危害形态：宿主声明了业务幂等键（跨副本接管重跑靠它不重复施加），跨会话
+// 重试却被拒 ⇒ 重跑失败 ⇒ 业务动作要么没做成，要么被重做一遍。
+func TestBusinessIdempotencyKeyAcrossSessionsIsReplayed(t *testing.T) {
+	h := &countingHandler{}
+	p, err := pipeline.New(storage.NewMem().Effects(), time.Minute, []pipeline.Tool{{
+		Name: "deploy", Safe: true, Handler: h.run,
+		IdempotencyKey: func(context.Context, []byte) (string, error) {
+			return "order-42", nil
+		},
+	}})
+	if err != nil {
+		t.Fatalf("建管线失败: %v", err)
+	}
+
+	first := p.Execute(context.Background(), "sess-A", chat.ToolCall{ID: "call-1", Name: "deploy", Arguments: `{"target":"prod"}`})
+	if first.Kind != pipeline.KindApplied {
+		t.Fatalf("首调应为 applied，got %s（%s）", first.Kind, first.Content)
+	}
+
+	second := p.Execute(context.Background(), "sess-B", chat.ToolCall{ID: "call-2", Name: "deploy", Arguments: `{"target":"prod"}`})
+	if second.Kind != pipeline.KindReplayed {
+		t.Fatalf("同一次业务动作跨会话重试应为 replayed，got %s（%s）", second.Kind, second.Content)
+	}
+	if h.count() != 1 {
+		t.Fatalf("重放不得重复施加：执行体应仍只被调 1 次，got %d", h.count())
+	}
+}
