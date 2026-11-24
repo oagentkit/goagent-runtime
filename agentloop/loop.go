@@ -13,7 +13,8 @@
 // 任意两个 commit 之间时，恢复点要么包含完整的「assistant 工具请求 +
 // tool 结果回填」，要么两者都不包含——因为回填与提交在同一段顺序代码里。
 // 恢复时若读到**不完整**的历史（assistant 请求了工具但结果缺失），视为
-// 存储被外部篡改，fail-closed 报错，不猜。
+// 存储被外部篡改，fail-closed 报错，不猜——**除非**账本（invocation）背书：
+// 账本里那条调用还没收口 ⇒ 它是崩溃窗口的合法产物（见 journal.go）。
 //
 // # 幂等键与 toolCallID
 //
@@ -36,6 +37,7 @@ import (
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/contract"
 	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/invocation"
 	"github.com/yi-nology/goagent-kernel/roundguard"
 
 	"github.com/yi-nology/goagent-runtime/chat"
@@ -119,6 +121,19 @@ type Config struct {
 	// 累计、commit 改为联合提交（提交成功后统一广播，广播失败只计数）；
 	// nil = 两步旧路径（现状语义，向后兼容）。
 	Joint JointCommitter
+	// Journal 工具调用账本（可选；nil = 不落账本）。
+	//
+	// 装上它，循环获得「崩溃后按账本续跑」的能力：执行前把调用身份
+	// （callID + 工具名 + 参数）落到账本，恢复时按账本续跑，**不再问模型要
+	// 那次调用**。nil = 退化为旧语义（历史快照单独保证幂等键；崩溃后模型重
+	// 新生成调用 ⇒ 同一业务动作可能被再施加一次）。
+	Journal invocation.Store
+	// Reconcile 账目处于「结果未知」时的裁决钩子（可选；nil = 只报告不裁决）。
+	//
+	// 判据归内核（invocation.Recovery 判「要做什么」），**怎么裁决**是宿主的
+	// 事：远端到底生效没有，只有宿主知道。钩子返回 applied（已生效，附结果）
+	// 或 executing（未生效，可重做）；其它返回值一律判红。
+	Reconcile func(ctx context.Context, sessionID string, e invocation.Entry) (invocation.State, []byte, error)
 }
 
 // Result 一次 Run 的结果。
@@ -227,8 +242,20 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 	if snap != nil && snap.Status == StatusAwaitingApproval {
 		return &Result{Status: StatusAwaitingApproval, PendingCallID: pendingCallID(messages)}, nil
 	}
-	messages = append(messages, chat.Message{Role: chat.RoleUser, Content: user})
 	st := newRunState(sessionID, messages, done, snap)
+	// 账本模式：先按账本续跑未完成的调用，再谈下一轮。
+	//
+	// ★ 顺序是**协议要求**：历史里有未答复的工具调用时，模型协议不接受把它
+	//   悬着继续对话（下一轮模型看到的是「assistant 要了工具但没有结果」）。
+	//   先续跑 ⇒ 历史自洽，再让模型接着说。
+	//
+	// 挂起等审批的会话在上面已短路（不能替宿主把没批的调用执行掉）。
+	if l.cfg.Journal != nil {
+		if err := l.resumePending(ctx, st); err != nil {
+			return st.res, err
+		}
+	}
+	st.messages = append(st.messages, chat.Message{Role: chat.RoleUser, Content: user})
 	return l.drive(ctx, st)
 }
 
@@ -308,6 +335,31 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 			"round": st.used.Rounds, "tool_calls": len(calls),
 		})
 
+		// 账本模式：**先落账、后提交历史**。
+		//
+		// 顺序有讲究：**账本先、历史后**。
+		//
+		//   - 账本先：身份（callID + 工具名 + 参数）先落在账上 ⇒ 崩溃后恢复
+		//     按账本续跑，**不问模型要那次调用** ⇒ 幂等键不变 ⇒ 闸认得出是
+		//     同一次动作 ⇒ 同一业务动作不会被再施加一遍。
+		//   - 历史先：崩溃时历史里没有那次请求 ⇒ 模型重新生成 ⇒ 新 callID ⇒
+		//     同一业务动作再施加一遍——那正是账本要封的窗口。
+		//
+		// 这个顺序还保证一条不变量：**凡是进了历史的调用，账上必有** ⇒ 恢复
+		// 的工作清单可以完全由账本驱动（账本领先历史的那一段只有账本知道）。
+		//
+		// 只在**账本模式**下多提交一次快照；未装账本时快照节奏与旧版一致。
+		if l.cfg.Journal != nil && len(calls) > 0 {
+			for _, call := range calls {
+				if err := l.journalPlan(ctx, st.sessionID, call); err != nil {
+					return st.res, err
+				}
+			}
+			if err := l.commit(ctx, st, contract.StatusRunning); err != nil {
+				return st.res, err
+			}
+		}
+
 		if len(calls) == 0 {
 			st.res.Status = contract.StatusSucceeded
 			st.res.Final = resp.Content
@@ -340,9 +392,19 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 				}
 				switch decision {
 				case ApprovalApprove:
-					// 批准：直通执行。
+					// 批准：直通执行（账目记「已获批准」——审批闸的判决留痕）。
+					if err := l.journalAdvance(ctx, st.sessionID, call.ID,
+						invocation.StateApproved, invocation.Update{}); err != nil {
+						return st.res, err
+					}
 				case ApprovalDeny:
 					// 拒绝以工具观察回喂：模型可自行改道；副作用未施加。
+					// 账目收口：rejected = **审批闸**判的「确定未施加」（终态）。
+					if err := l.journalAdvance(ctx, st.sessionID, call.ID,
+						invocation.StateRejected,
+						invocation.Update{Reason: denyObservation}); err != nil {
+						return st.res, err
+					}
 					st.messages = append(st.messages, chat.Message{
 						Role:       chat.RoleTool,
 						Content:    denyObservation,
@@ -371,11 +433,20 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 			l.emit(ctx, st, EventToolCall, map[string]any{
 				"call_id": call.ID, "tool": call.Name, "args": call.Arguments,
 			})
-			// 执行。
+			// 执行（账本：执行前 → executing，执行后 → applied / uncertain /
+			// failed）。执行前那一步是**崩溃窗口的合法形态**：进程死在这一
+			// 段时远端做没做不知道，但账目本身合法 ⇒ 恢复时据此对账。
+			if err := l.journalAdvance(ctx, st.sessionID, call.ID,
+				invocation.StateExecuting, invocation.Update{}); err != nil {
+				return st.res, err
+			}
 			out := l.cfg.Tools.Execute(ctx, st.sessionID, call)
 			st.used.ToolCalls++
 			st.used.Tools[call.Name]++
 			st.res.ToolCalls = st.used.ToolCalls
+			if err := l.journalOutcome(ctx, st.sessionID, call.ID, out); err != nil {
+				return st.res, err
+			}
 			st.messages = append(st.messages, chat.Message{
 				Role:       chat.RoleTool,
 				Content:    out.Content,
@@ -395,6 +466,10 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 			}
 			// 回填与提交在同一段顺序代码里：崩溃窗口的两端各自自洽。
 			if err := l.commit(ctx, st, contract.StatusRunning); err != nil {
+				return st.res, err
+			}
+			// 结果已回填进历史 ⇒ 账目收口（applied → result_recorded，终态）。
+			if err := l.journalFinish(ctx, st.sessionID, call.ID); err != nil {
 				return st.res, err
 			}
 		}
@@ -428,7 +503,14 @@ func (l *Loop) loadHistory(ctx context.Context, sessionID string) (*checkpoint.S
 		return nil, nil, nil, errors.Wrap(err, "读取会话快照失败", "session", sessionID)
 	}
 	allowPending := snap.Status == StatusAwaitingApproval
-	if err := verifyHistory(snap.Fields[fieldHistory], allowPending); err != nil {
+	// 账本放行面：**合法未完成调用**（崩溃窗口的产物）由账本背书——账本里
+	// 那条调用还没收口 ⇒ 允许历史里留着未答复的调用；账本里没有 ⇒ 仍是篡改，
+	// fail-closed 不变。
+	legitimate, err := l.journalLegitimate(ctx, sessionID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := verifyHistory(snap.Fields[fieldHistory], allowPending, legitimate); err != nil {
 		return nil, nil, nil, errors.Wrap(err, "会话快照历史不完整", "session", sessionID)
 	}
 	var messages []chat.Message
@@ -488,7 +570,7 @@ func (l *Loop) commit(ctx context.Context, st *runState, status string) error {
 //
 // allowPending（挂起形态放行面）：仅允许**最后一条** assistant 消息存在
 // 未答复调用——这正是挂起提交的形态；更早消息的未答复调用仍是篡改。
-func verifyHistory(raw string, allowPending bool) error {
+func verifyHistory(raw string, allowPending bool, legitimate map[string]bool) error {
 	if raw == "" {
 		return nil
 	}
@@ -512,11 +594,21 @@ func verifyHistory(raw string, allowPending bool) error {
 		if m.Role != chat.RoleAssistant {
 			continue
 		}
-		pendingOK := allowPending && i == lastAssistant
 		for _, c := range m.ToolCalls {
-			if !answered[c.ID] && !pendingOK {
+			if answered[c.ID] {
+				continue
+			}
+			// 放行面只有两种：挂起形态（最后一条 assistant 消息，等人工决策）
+			// 与**合法未完成调用**（账本背书：账本里这条还没收口 ⇒ 崩溃窗口的
+			// 产物，不是篡改）。两者都只认**最后一条** assistant 消息——更早
+			// 消息的未答复仍是篡改。
+			if i != lastAssistant {
 				return errors.Newf("assistant 的工具调用缺少结果回填: call_id=%s tool=%s", c.ID, c.Name)
 			}
+			if allowPending || legitimate[c.ID] {
+				continue
+			}
+			return errors.Newf("assistant 的工具调用缺少结果回填: call_id=%s tool=%s", c.ID, c.Name)
 		}
 	}
 	return nil
