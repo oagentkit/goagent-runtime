@@ -2,6 +2,40 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.4] — 2026-11-24
+
+- 文档(site)：生成页随 v0.6.4 段重生成——版本记录页 + llms.txt 追平
+
+站点的「版本记录」页与 llms.txt 是**生成物**（由 site/scripts/gen_reference_pages.mjs
+从仓内 CHANGELOG.md 投影），手改会被 CI 判红。本提交只重生成，不手改内容。
+- 版本记录页新增 v0.6.4 一行；
+- llms.txt 的「已发布版本 13 个，最新 v0.6.4」随事实面追平。
+
+- 文档(readme)：v0.6.4 发布面——补「版本与发布」入口（README 原本无版本面）+ 记下 tag 快照必须含本版段这条纪律
+
+README 此前**没有任何版本面**：下游落到仓库首页看不到发布说明入口、也不知道版本号
+的事实源在哪。本节补三件事：
+① 发布说明入口（GitHub Releases + 仓内 CHANGELOG.md + 站点「版本记录」页是它的投影）；
+② 版本号的事实源指明是 tag 与 CHANGELOG——本 README 不抄第二份版本号（抄了只会漂）；
+③ 一条纪律：`go get` 拿到的模块里 CHANGELOG 必须含该 tag 自己那一段，tag 打在 CHANGELOG
+   生成之前就会缺段——v0.6.3 就是这么缺了一段（CI 的「CHANGELOG 同步校验」作业判红），
+   其修复随 v0.6.4 出货。
+本版零代码变化（Go 代码零改动）。
+
+- 文档(changelog)：清流氓本地 v0.6.2 tag 后按远端边界重生成——CI 对账归一
+
+根因：本会话早前 git tag v0.6.2 本地成功/推送失败（远端已被并行会话占用），
+本地从此留了指向 rebase 前旧提交的流氓 tag，切段边界与 CI（远端 tag=73feddd）
+不同 ⇒ 本地对账恒过、CI 恒红。tag -d + fetch --tags --force 后按远端边界
+重生成，两侧对齐。
+
+- 文档(changelog)：v0.6.3 段改由生成器产出（手写段与对账产物不一致，CI 判红）+ releases 追平
+- 文档(changelog)：补 v0.6.3 版本段（tag 已打，生成器对账）+ 站点 releases/packages 追平
+
+v0.6.3 tag 已打但 CHANGELOG.md 缺该版本段 ⇒ CI「CHANGELOG 同步校验」判红
+（v0.6.1/v0.6.2 同款收尾工序）；站点生成页随段重生成。
+
+
 ## [v0.6.3] — 2026-11-24
 
 ### 新增(agentloop)：工具事件拆成执行前请求+执行后收口（批669 面2 事件映射的上游前置）
