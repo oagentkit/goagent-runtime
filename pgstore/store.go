@@ -96,6 +96,16 @@ func (s *Store) Effects() *EffectStore { return NewEffectStore(s.pool) }
 // Snapshots 进度快照面。
 func (s *Store) Snapshots() *SnapStore { return NewSnapStore(s.pool) }
 
+// Journal 工具调用账本面（invocation.Store）。
+//
+// ⚠ 这个面**刻意不参与 Apply 批次**：账本必须在副作用**之前**落库
+// （P0-09 闭合的前提：崩溃后按账本续跑，不再问模型要那次调用），而批次
+// 的提交点在批次**之后** ⇒ 参与批次就等于把「账本晚于副作用」变成常态
+// ⇒ 重复施加的窗口重新打开。它走自己的事务（见 journal.go 的包头）。
+//
+// 两侧能力面对位：SQLite 侧同款入口是 sqliteadapter.Store.Journal()。
+func (s *Store) Journal() *JournalStore { return NewJournalStore(s.pool) }
+
 // Events 事件面。
 func (s *Store) Events() *EventStore { return NewEventStore(s.pool) }
 

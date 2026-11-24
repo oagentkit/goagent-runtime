@@ -14,6 +14,7 @@ import (
 	"github.com/oekit/pkg/errors"
 
 	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/invocation"
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
@@ -143,7 +144,26 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 			return nil, errors.Newf("挂起调用在历史里找不到: %s", pending)
 		}
 		name := call.Name
+		// 账本：审批决策已落 ⇒ 记「已获批准」；执行前 → executing
+		//（**崩溃窗口的合法形态**：进程死在这一段时远端做没做不知道，
+		//  但账目本身合法 ⇒ 恢复时据此对账）。
+		if l.cfg.Journal != nil {
+			if _, err := l.journalEntry(ctx, sessionID, call); err != nil {
+				return nil, err
+			}
+			if err := l.journalAdvance(ctx, sessionID, call.ID,
+				invocation.StateApproved, invocation.Update{}); err != nil {
+				return nil, err
+			}
+			if err := l.journalAdvance(ctx, sessionID, call.ID,
+				invocation.StateExecuting, invocation.Update{}); err != nil {
+				return nil, err
+			}
+		}
 		out := l.cfg.Tools.Execute(ctx, sessionID, call)
+		if err := l.journalOutcome(ctx, sessionID, call.ID, out); err != nil {
+			return nil, err
+		}
 		st.used.ToolCalls++
 		st.used.Tools[name]++
 		res.ToolCalls = st.used.ToolCalls
@@ -160,6 +180,17 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 			res.Uncertain = append(res.Uncertain, pending)
 		}
 	} else {
+		// 账目收口：rejected = **审批闸**判的「确定未施加」（终态）。
+		if l.cfg.Journal != nil {
+			if _, err := l.journalEntry(ctx, sessionID, chat.ToolCall{ID: pending}); err != nil {
+				return nil, err
+			}
+			if err := l.journalAdvance(ctx, sessionID, pending,
+				invocation.StateRejected,
+				invocation.Update{Reason: denyObservation}); err != nil {
+				return nil, err
+			}
+		}
 		st.messages = append(st.messages, chat.Message{
 			Role:       chat.RoleTool,
 			Content:    denyObservation,
@@ -173,6 +204,10 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 
 	// 决策与回填同段提交（挂起恢复窗口的两端各自自洽），接主驱动循环续跑。
 	if err := l.commit(ctx, st, contract.StatusRunning); err != nil {
+		return res, err
+	}
+	// 结果已回填进历史 ⇒ 账目收口（applied → result_recorded，终态）。
+	if err := l.journalFinish(ctx, sessionID, pending); err != nil {
 		return res, err
 	}
 	return l.drive(ctx, st)
