@@ -390,6 +390,19 @@
   box-shadow: 0 8px 24px rgb(163 113 247 / 20%) !important;
 }
 
+/* 锚点落位：目标标题不能贴在视口顶（会被 fixed 导航栏压住）。
+ *
+ * 偏移量 = 导航栏高度 + 余量。--navbar-height 由 VuePress 主题定义
+ * （3.6rem = 58px，与 .vp-navbar 的实测高度一致），所以这个值随主题走，
+ * 不用在这里写死像素。
+ *
+ * 为什么它是「锚点落位」的唯一口径：浏览器的 hash 定位、scrollIntoView、
+ * 以及 client.ts 里「目标有没有在位」的判据都读它 ⇒ 偏移量只有一份真相，
+ * 不会出现「浏览器按 A 算、我的判据按 B 算」的错位。 */
+:is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: calc(var(--navbar-height, 3.6rem) + 12px);
+}
+
 /* 尊重系统的减弱动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
