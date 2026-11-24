@@ -2,6 +2,22 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.3] — 2026-11-24
+
+### 新增(agentloop)：工具事件拆成执行前请求+执行后收口（bianque 批669 面2 事件映射的上游前置）
+
+EventToolCall 语义收紧为**执行前**的请求事件（payload 补 args——宿主 SSE
+工具卡在卡创建时即拿到参数）；新增 EventToolResult 收口事件（call_id/tool/
+outcome/content/bytes），两侧 call_id 配对；审批闸拒绝以 tool_result 收口
+（outcome=approval_denied、content=拒绝观察）。outcome 复用 pipeline.Kind
+词表 + approval_denied 专用值。执行前后的发射点在同一顺序代码段内（与
+「回填与提交同段」同一纪律）。
+
+宿主映射（bianque 批669）：agent.tool_call→agentrun tool_call（卡创建含参）、
+agent.tool_result→agentrun tool_result（卡收口含结果）——loop 路径的 SSE
+工具卡与既有 agentrun 路径同形态。相关测试口径同步（一轮四事件→五事件；
+#16 的 bytes 键语义收编进收口事件）。
+
 ## [v0.6.2] — 2026-11-24
 
 ### 新增(agentloop)：tool_call 事件补结果字节数（审计轨迹面）
