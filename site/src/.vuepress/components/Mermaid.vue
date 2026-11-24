@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import mermaid from 'mermaid'
+import { MERMAID_IDLE_EVENT } from '../mermaid-events'
 
 const props = defineProps<{ code: string }>()
 const el = ref<HTMLElement | null>(null)
@@ -8,7 +9,10 @@ const el = ref<HTMLElement | null>(null)
 // mermaid.render 不支持并发调用，且各组件实例的渲染 id 必须唯一：
 // 全局串行队列 + 随机 id，两者缺一不可（并发/重 id 会让图空白或错位）。
 declare global {
-  interface Window { __mermaidQueue?: Promise<void> }
+  interface Window {
+    __mermaidQueue?: Promise<void>
+    __mermaidPending?: number
+  }
 }
 
 const isDark = (): boolean =>
@@ -16,7 +20,20 @@ const isDark = (): boolean =>
 
 function enqueue(job: () => Promise<void>): void {
   const prev = window.__mermaidQueue ?? Promise.resolve()
-  const next = prev.then(job).catch(() => {})
+  window.__mermaidPending = (window.__mermaidPending ?? 0) + 1
+  const next = prev
+    .then(job)
+    .catch(() => {})
+    .then(() => {
+      window.__mermaidPending = (window.__mermaidPending ?? 1) - 1
+      // 队列排空 = 布局稳定（所有图的最终高度都已落定）。
+      // 派发信号，让锚点定位方有机会重算一次目标位置——
+      // 锚点算在「图还没长出来」的布局上，不重定位就会偏（见 mermaid-events.ts）。
+      if (window.__mermaidPending <= 0) {
+        window.__mermaidPending = 0
+        window.dispatchEvent(new CustomEvent(MERMAID_IDLE_EVENT))
+      }
+    })
   window.__mermaidQueue = next
 }
 
