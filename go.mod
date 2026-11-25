@@ -5,10 +5,10 @@ go 1.27.4
 require (
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/oagentkit/agent v0.16.0
-	github.com/oagentkit/goagent-kernel v0.77.0
-	github.com/oagentkit/guardx v0.28.0
+	github.com/oagentkit/goagent-kernel v0.78.0
+	github.com/oagentkit/guardx v0.30.0
 	github.com/oekit/concurrency v0.40.0
-	github.com/oekit/pkg v0.61.4
+	github.com/oekit/pkg v0.61.5
 	modernc.org/sqlite v1.61.0
 )
 
