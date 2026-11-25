@@ -2,6 +2,15 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.7.1] — 2026-11-26
+
+- 构建：依赖地板追到最新——kernel v0.78.0 / guardx v0.30.0 / pkg v0.61.5（入驻 oagentkit 矩阵后的地板时效对齐）
+- 构建(bridge)：嵌套模块 go.sum 落地 + CI job——bridge/llmchat 与 bridge/einotool 进门禁
+
+runtime v0.7.0 tag 后 bridge 的依赖可解析（eino 0.9.23 随 llm v0.27.0 的
+模块图解析）；CI 补 bridge job（build+vet+test），LLM SDK 边从此有门禁守着。
+
+
 ## [v0.7.0] — 2026-11-26
 
 ### 新增(agentloop)：接上工具调用账本——执行前落 planned、恢复按账本续跑
