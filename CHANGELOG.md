@@ -2,6 +2,140 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.7.0] — 2026-11-26
+
+### 新增(agentloop)：接上工具调用账本——执行前落 planned、恢复按账本续跑
+
+- 5edc368
+
+### 新增(storage)：工具调用账本存储面——PG/SQLite 两份 DDL + invocation.Store 实现
+
+- 89a8a0d
+
+### 修复(site)：锚点落位认「读者意图」不认框架改写的 hash——修掉连跳两次的抖动
+
+上一版（#19）把滚动接管做完了，但线上仍会抖。真实计时抓拍（headless Chrome，
+线上 recovery.html）显示：落位**正确**（scrollY=1207、标题 top=70）之后，框架
+随滚动改写了地址栏的 hash，守卫照着改写后的 hash 追 ⇒ 页面被拽上去两次
+（1207 → 631 → 76）。
+改写 hash 的是主题自带的 @vuepress/plugin-active-header-links：它随滚动把
+「当前所在章节」写进地址栏（监听 scroll → 比对各标题 offsetTop →
+router.replace({hash})）⇒ **地址栏里的 hash 是框架的派生态，不是读者的意图**。
+改动：
+- 落位目标改为「读者明确要的锚点」（URL 初始 hash / 点锚点 / 路由 push /
+  前进后退），不再每拍去读 window.location.hash；
+- 框架的「当前章节」判定与落位偏移对齐（define 覆盖 __AHL_OFFSET__：章节起点
+  = 标题 offsetTop，而落位把标题放在导航栏下方 70px ⇒ 落位点落在**上一节**里
+  ⇒ 插件会立刻把深链锚点抹掉）；
+- 自己发起的滚动不再被接管窗口改写（否则点「最后一个小节」会被拽回旧目标）；
+- 目标够不到顶时按文档底部落位并交还滚动权（否则接管窗口不关 ⇒ 读者上滚被劫持）；
+- 落位期间把地址栏的 hash 钉在读者要的锚点上（框架会按「读者在页首」清空它）；
+- 路由初始导航完成前不许动路由（否则 replace 会把待执行的初始导航顶掉 ⇒ 整站
+  落到首页）。
+实测（headless Chrome，真实计时，非虚拟时间）：
+- 深链 #uncertain-另一种死法 ⇒ 一次落位 scrollY=1207、标题 top=70、hash 不漂；
+- 侧栏目录项 ⇒ 一次落位 top=69；标题旁原生锚点 ⇒ 一次落位 top=70；
+- 线上旧版（#19）对照：点侧栏后被拽到 y=76（标题 top=624，偏 555px）。
+
+### 修复(site)：锚点落位等「布局已定」再滚——接管框架按陈旧布局算的平滑滚动
+
+- fcbbceb
+
+### 修复(site)：锚点落位按「布局已定」再滚——接管框架按陈旧布局算的平滑滚动
+
+- 75ed374
+
+### 修复(site)：接管 hash 定位 + 对齐循环持续复查（消除「目标已在位就收工」的早退）
+
+- 32f7403
+
+### 修复(site)：锚点落位别再抖——内容长高后重新对齐 + 同 hash 点击也滚
+
+mermaid 图是纯客户端渲染的：围栏在构建期只产出一个空容器，SVG 要等浏览器里
+mermaid.render() 跑完才注入 ⇒ 容器高度从几十 px 长到几百 px（本页三张图合计
+约 1160px）。而锚点定位（浏览器 hash 定位 + vue-router 的 scrollBehavior）
+算在「内容还没长出来」的那份布局上 ⇒ 落位按旧布局算，与最终位置差出几百 px
+（实测 recovery 页偏 577px；开了平滑滚动时甚至被 Chrome 的 scroll anchoring
+顶到页面底部），冷/热加载还时对时错 ⇒ 观感就是「抖」。
+三件事互相抢同一个滚动位置：浏览器 hash 定位、vue-router 的平滑 scrollBehavior、
+Chrome 的 scroll anchoring。谁最后落地取决于时序 ⇒ 判一次必然不稳。
+改动：
+- ① 对齐循环：每 250ms 复查目标在不在位，不在位就数值化地滚过去（位置自己从
+  此刻的 rect 算，滚动自己做 ⇒ 不受 scrollIntoView 的陈旧位置影响），顺带打断
+  在飞的平滑滚动。循环「稳了」的判据是「滚动位置连续 2 秒没动 且 目标已在位」——
+  不是「目标已在位」（框架的平滑动画会从目标旁边滑过去那一刻，收工就等于把最后
+  一棒让给了它）。
+- ② 标题加 scroll-margin-top（导航栏高度 + 余量）：否则锚点标题会被 fixed 导航栏
+  压住；这份偏移是浏览器、scrollIntoView 与本页判据共用的唯一口径。
+- ③ 同 hash 锚点点击自己滚一次：vue-router 判它「重复导航」⇒ 不触发
+  scrollBehavior ⇒ 点击完全没反应。
+- ④ Mermaid 组件在渲染队列排空时派发信号，供上面的循环判「这一批图渲染完了」。
+
+### 修复(执行完整性)：闭合评审 P0-01/02/03/04/06/07/08 与 P1-02（审批不绕过、竞争不 Panic、结果不串轮、收尾不半截）
+
+第三方联合源码评审逐条核实后修复 8 项，每项带回归用例；关键项做过反向验证
+（临时回退修复 ⇒ 用例必红）。
+P0-06 资源竞争不再 Panic：kernel 的 contended 是「正常判据」（OutcomeContended +
+nil error，刻意不返 error），装配层原走 default 分支盲调 err.Error() ⇒ 空指针。
+补 KindContended 词表 + 显式分支；未定义 outcome 也不再盲调（失败形态是变红，
+不是 Panic）。
+P0-08 声明要审批的工具不再被静默放行：runtime/cluster 的装配面此前没有
+ApprovalGate 字段 ⇒ 标准模板里 NeedsApproval=true 的工具直接执行。现暴露审批闸
+并在**装配期** fail-closed：有工具要审批却无闸 ⇒ 构造失败（nil 闸 ≠ 放行）。
+P0-01 异步审批恢复带回原始参数：此前只重建 ID+工具名 ⇒ 执行体收到空参数，
+施加的不是获批的那个动作。现从挂起快照取回完整 ToolCall。
+P0-07/P1-02 Loop 的可变状态改为每次执行独立（runState）：seq/pendings 原挂在
+Loop 上 ⇒ 并发会话互相串扰（跨会话事件被并进别人的事务、序号回退导致提交被判
+陈旧）+ 失败执行的事件滞留到下一次执行。
+P0-02 同会话第二轮不再拿到第一轮的结果：结果事件按 sessionID 过滤，而 sessionID
+是长期会话身份 ⇒ 等待方从事件流开头扫会先撞上上一轮的结果。等待起点改为「本次
+投递前的事件面水位线」（事件 ID 单调 ⇒ 本轮结果必在其后）。
+P0-03 结果事件与任务完成同事务（pgstore.Finish）：原先分开写 ⇒「任务已完成但
+结果没到」或「旧执行者的结果已对外可见而任务没完成」两类半截状态。任一失败整批
+回滚 ⇒ 任务保持可恢复状态。
+P0-04 业务幂等键跨会话重试不再被判动作身份冲突：kernel 的动作身份三元组含
+Resource，默认资源键掺 sessionID ⇒ 同一次业务动作换个会话重试即 ErrActionConflict
+（判 failed 而非 replayed）。默认资源键在声明业务幂等键时改用业务口径，并新增
+Tool.ResourceKey 供宿主显式声明真正的互斥域。
+门禁：把 go test -race 接进 Makefile 与 CI（竞态判据要有人跑它；-race 在 Linux
+强制要求 cgo，故显式写 CGO_ENABLED=1）。
+评审中未在本 PR 闭合的项（需架构级改造，判据归 kernel）：P0-09/P0-10（执行前
+落调用身份的 Tool Invocation Journal）、P0-05（Fence 传到工具执行体）、P1-01
+（服务端批量认领）、P1-03（Complete 的租约有效期口径属 kernel 契约缺口）。
+
+### 重构：org 归属迁移 + roundguard 新路径 + 家族钦定适配器（v0.7.0）
+
+* refactor!: org 归属迁移 + roundguard 新路径 + 家族钦定适配器（v0.7.0 破窗）
+① module path：github.com/yi-nology/goagent-runtime → github.com/oagentkit/goagent-runtime
+（仓已迁入 oagentkit org，见 #22；旧 URL 经 GitHub 重定向可继续访问）。
+全仓 import/文档/site 引用同步改写。
+② kernel 地板：github.com/oagentkit/goagent-kernel v0.77.0（kernel 同波改名 +
+对话域七包上抛，roundguard import 改指 github.com/oagentkit/agent/roundguard）。
+③ 家族钦定适配器（嵌套模块 bridge，LLM SDK 边只在 bridge 内——主 module
+「模型接缝只有 chat.Model、零 LLM SDK import」的声明面不变）：
+- bridge/llmchat：oagentkit/llm → chat.Model（裸模型路径承接工具调用；
+  流式逐片搬运 + DeltaAggregator 归并出最终响应）
+- bridge/einotool：eino InvokableTool → pipeline.Tool（副作用闸字段不猜）
+④ AGENTS.md 白名单补 invocation（pgstore/sqliteadapter 实际 import 面，
+文档漂移修正）。README 补 bridge 两包与接缝声明。
+发版顺序：kernel v0.77.0 → agent v0.16.0 → 本仓 v0.7.0 → bridge/v0.1.0。
+cluster 池接线复评（vs kernel/worker.Loop、queue/worker.Pool）另开 issue，
+不在本 wave 夹带。
+* fix: go.sum 补齐新路径条目——kernel v0.77.0 / agent v0.16.0 tag 落地后的真实 tidy
+* fix(taskboard): 三套 Board 实现补 Complete 凭据面——租约过期拒收（kernel v0.77 boardtest 新判据）
+kernel v0.76.0 起 taskboard.Complete 的凭据面 = 令牌 + 租约未过期
+（ErrLeaseLost；判据走 taskboard.LeaseHeld 单点）。本仓三套实现随 kernel
+v0.77.0 地板补齐，判定与写回在同一事务内（与 Renew 同一纪律）：
+- examples/reference-runtime（内存）：s.clock() 锁外取 + LeaseHeld
+- pgstore：lockTask 行锁内 nowIn + boardRow.held + 条件写回
+- sqliteadapter：同事务读行 + boardRow.held + 条件写回
+boardtest 新增子判据「租约过期后完成被拒」三实现全绿。
+站点生成器同步：KERNEL_MOD/站点 URL 改指 oagentkit；pitfalls.json
+kernelFloor v0.75.1→v0.77.0；16 个生成产物对账绿。
+
+- 文档(site)：站点口径同步 kernel v0.75.1 + 参考页重生成
+- 文档(site)：生成页随 v0.6.4 合流 + race 门禁重生成（门禁体系页新增 race 作业与 make race 目标）
+
 ## [v0.6.4] — 2026-11-24
 
 - 文档(site)：生成页随 v0.6.4 段重生成——版本记录页 + llms.txt 追平
