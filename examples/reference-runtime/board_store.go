@@ -171,7 +171,12 @@ func (s *boardStore) Release(_ context.Context, id taskboard.TaskID, token strin
 }
 
 // Complete 标记完成（凭令牌）：终态不带 owner，避免「谁做完的」与「谁还占着」混在一起。
+//
+// 凭据面 = 令牌 + 租约未过期（kernel v0.77 的 boardtest 新判据；判据走
+// taskboard.LeaseHeld 单点，不各写一份）：过期持有者的完成被拒——终态内容
+// 必须取决于「谁有资格提交」而不是「谁先提交」。
 func (s *boardStore) Complete(_ context.Context, id taskboard.TaskID, token string) error {
+	now := s.clock() // 锁外取存储时钟（与 Renew 同一纪律，issue #317）
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -181,6 +186,9 @@ func (s *boardStore) Complete(_ context.Context, id taskboard.TaskID, token stri
 	}
 	if t.State != taskboard.StateClaimed || t.Lease.Token != token {
 		return errors.Wrap(taskboard.ErrLeaseLost, "租约令牌不匹配", "task", string(id))
+	}
+	if !taskboard.LeaseHeld(t, now) {
+		return errors.Wrap(taskboard.ErrLeaseLost, "租约已过期，资格终止（任务可被接管）", "task", string(id))
 	}
 	t.State = taskboard.StateDone
 	t.Owner = ""

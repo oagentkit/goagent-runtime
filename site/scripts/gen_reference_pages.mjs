@@ -28,7 +28,7 @@ const ADR_OUT = join(SITE, 'src', 'adr')
 const PUBLIC = join(SITE, 'src', '.vuepress', 'public')
 const MANIFEST = join(SITE, 'src', '.vuepress', 'adr-manifest.json')
 const DATA = join(SITE, 'data', 'pitfalls.json')
-const KERNEL_MOD = 'github.com/yi-nology/goagent-kernel'
+const KERNEL_MOD = 'github.com/oagentkit/goagent-kernel'
 
 const read = (p) => readFileSync(p, 'utf8')
 const readRepo = (p) => read(join(REPO, p))
@@ -605,7 +605,7 @@ function loadReleases(src) {
   return out
 }
 // ── 页：决策记录（ADR）─────────────────────────────────────────────────
-const GH_REPO = 'https://github.com/yi-nology/goagent-runtime'
+const GH_REPO = 'https://github.com/oagentkit/goagent-runtime'
 
 function renderAdrIndex(adrs) {
   const L = [
@@ -675,7 +675,7 @@ function renderReleases(releases) {
 // ── AI 直读入口：llms.txt（同样生成，数字不手抄）───────────────────────
 // 与 kernel / 矩阵站的 llms.txt 同一形态：给 AI 代理的紧凑事实页。
 function renderLlms(goMod, disk, readmePkgs, releases, adrs) {
-  const site = 'https://yi-nology.github.io/goagent-runtime'
+  const site = 'https://oagentkit.github.io/goagent-runtime'
   const gh = GH_REPO
   const readmeMap = new Map(readmePkgs.map((p) => [p.name, p.desc]))
   const short = (s) => {
@@ -711,7 +711,7 @@ function renderLlms(goMod, disk, readmePkgs, releases, adrs) {
     '4. **cluster 的「接管不重复施加副作用」有前提**：靠宿主声明业务幂等键 ' + code('pipeline.Tool.IdempotencyKey') + '（如订单号）；未声明时跨副本这一步依赖模型给出稳定 tool_call_id。',
     '',
     '## AI 直读入口（同族）',
-    '- goagent-kernel（编排内核）: https://yi-nology.github.io/goagent-kernel/llms.txt',
+    '- goagent-kernel（编排内核）: https://oagentkit.github.io/goagent-kernel/llms.txt',
     '- oekit（基础库矩阵）: https://oekit.github.io/llms.txt',
     '- oagentkit（Agent/LLM 编排工具链矩阵）: https://oagentkit.github.io/llms.txt',
     '',

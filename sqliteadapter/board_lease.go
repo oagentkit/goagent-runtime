@@ -158,9 +158,38 @@ func (b *BoardStore) Release(ctx context.Context, id taskboard.TaskID, token str
 }
 
 // Complete 标记完成（凭令牌）：终态不带 owner，避免「谁做完的」与「谁还占着」混在一起。
+//
+// 凭据面 = 令牌 + 租约未过期（kernel v0.77 boardtest 新判据；判据走
+// taskboard.LeaseHeld 单点，本包用 boardRow.held 承接）：过期持有者的
+// 完成被拒——校验与写回在同一事务内，与 Renew 同一纪律。
 func (b *BoardStore) Complete(ctx context.Context, id taskboard.TaskID, token string) error {
 	return b.exec.run(ctx, func(tx *sql.Tx) error {
-		return releaseOrComplete(ctx, tx, id, token, string(taskboard.StateDone))
+		in := b.execIn(tx)
+		now, err := in.now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		r, err := scanBoardRow(tx.QueryRowContext(ctx,
+			`SELECT `+boardCols+` FROM gak_board_task WHERE id = ?`, string(id)))
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errors.Wrap(taskboard.ErrNotFound, "sqliteadapter: 任务不存在", "task", string(id))
+			}
+			return errors.Wrap(err, "sqliteadapter: 读任务行失败", "task", string(id))
+		}
+		if r.state != taskboard.StateClaimed || r.token != token {
+			return errors.Wrap(taskboard.ErrLeaseLost, "sqliteadapter: 租约令牌不匹配", "task", string(id))
+		}
+		if !r.held(now) {
+			return errors.Wrap(taskboard.ErrLeaseLost, "sqliteadapter: 租约已过期，资格终止", "task", string(id))
+		}
+		_, err = tx.ExecContext(ctx,
+			`UPDATE gak_board_task SET state = ?, owner = NULL, token = NULL, until = NULL, seq = seq + 1 WHERE id = ?`,
+			string(taskboard.StateDone), string(id))
+		if err != nil {
+			return errors.Wrap(err, "sqliteadapter: 完成写回失败", "task", string(id))
+		}
+		return nil
 	})
 }
 
