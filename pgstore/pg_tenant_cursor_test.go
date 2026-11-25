@@ -9,7 +9,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/tenant"
+	"github.com/oagentkit/goagent-kernel/tenant"
 )
 
 // TestTenantTailCursorStoreIsolation 尾随游标按租户隔离：同一 consumer 名

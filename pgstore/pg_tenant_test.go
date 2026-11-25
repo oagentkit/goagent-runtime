@@ -19,9 +19,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/sideeffect"
-	"github.com/yi-nology/goagent-kernel/tenant"
+	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/tenant"
 )
 
 // tenantCtx 注入租户上下文（写路径的 fail-closed 判据读它）。

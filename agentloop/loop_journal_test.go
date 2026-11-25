@@ -9,12 +9,12 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/invocation"
+	"github.com/oagentkit/goagent-kernel/invocation"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/storage"
 )
 
 // memJournal 内存账本（测试替身）：原子推进 + 操作轨迹 + 故障注入。

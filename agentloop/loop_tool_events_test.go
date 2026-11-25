@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/oagentkit/goagent-kernel/contract"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/storage"
 )
 
 // TestToolEventPairing 工具事件配对语义回归钉（批669 事件面补全）：

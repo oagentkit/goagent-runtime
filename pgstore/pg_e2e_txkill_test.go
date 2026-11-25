@@ -37,7 +37,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 )
 
 // TestPGE2EKillInsideTransactionLeavesNoHalfState 进程死在 Acquire 的事务中间：

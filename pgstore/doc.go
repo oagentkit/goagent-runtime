@@ -105,10 +105,10 @@
 package pgstore
 
 import (
-	"github.com/yi-nology/goagent-kernel/checkpoint"
-	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/sideeffect"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/checkpoint"
+	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // 编译期断言：本包的实现确实满足三套存储中立契约（+ 下游栅栏与续期扩展

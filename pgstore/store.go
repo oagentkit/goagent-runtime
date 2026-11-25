@@ -69,7 +69,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/controlplane"
+	"github.com/oagentkit/goagent-kernel/controlplane"
 )
 
 // Store 聚合 PG 参考实现的 11 个面访问器，供跨面原子提交用。

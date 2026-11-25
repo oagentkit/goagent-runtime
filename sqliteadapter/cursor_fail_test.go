@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 )
 
 // TestTailCursorStoreLoadFailureReturnsError 游标读失败必须返 error。

@@ -13,10 +13,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/runtime"
-	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/runtime"
+	"github.com/oagentkit/goagent-runtime/storage"
 )
 
 // scriptModel 脚本化假模型：每次 Chat 按剧本前进一步；errAt >= 0 时

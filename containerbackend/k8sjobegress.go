@@ -40,7 +40,7 @@ import (
 	"github.com/oekit/pkg/errors"
 
 	"github.com/oagentkit/guardx/sandbox"
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 // K8sCNICapability CNI 能力探测接口：回答「本集群 CNI 是否实现 NetworkPolicy

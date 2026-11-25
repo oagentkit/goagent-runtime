@@ -61,15 +61,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/roundguard"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/oagentkit/agent/roundguard"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/observe"
-	"github.com/yi-nology/goagent-runtime/pgstore"
-	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/observe"
+	"github.com/oagentkit/goagent-runtime/pgstore"
+	"github.com/oagentkit/goagent-runtime/pipeline"
 )
 
 // ResultEventType 结果事件类型：执行副本把一次执行的 Result 写进事件面，

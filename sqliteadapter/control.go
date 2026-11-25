@@ -61,8 +61,8 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/controlplane"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/controlplane"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // ControlStore controlplane.Store 的 SQLite 参考实现。

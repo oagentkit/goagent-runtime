@@ -33,7 +33,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 )
 
 // txKey 事务句柄在 ctx 里的键（私有：外部造不出带事务的 ctx）。

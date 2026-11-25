@@ -39,7 +39,7 @@ flowchart LR
 | `runtime` | 模板装配（embedded / standalone） | [展开](/goagent-runtime/packages/runtime.html) |
 | `observe` | eventbus → 宿主回调 | [展开](/goagent-runtime/packages/observe.html) |
 | `cluster` | 多副本模板装配（PG + worker 池：认领 / 租约 / 接管代次、跨副本事件面） | [模板选型](/goagent-runtime/templates/) |
-| `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——宿主抄它，不 import 它 | [仓内源码](https://github.com/yi-nology/goagent-runtime/tree/main/containerbackend) |
+| `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——宿主抄它，不 import 它 | [仓内源码](https://github.com/oagentkit/goagent-runtime/tree/main/containerbackend) |
 
 ## 依赖速查
 

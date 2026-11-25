@@ -39,7 +39,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 // k8sExecutionIDLabel 执行标识标签：幂等键在集群对象上的绑定点（Job 与 Pod

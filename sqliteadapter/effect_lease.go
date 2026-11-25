@@ -16,7 +16,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 )
 
 // leaseResourceErr 三项联查的第一项：租约的资源必须与动作的资源一致。

@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/runtime"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/runtime"
 )
 
 // scriptModel 脚本化假模型。

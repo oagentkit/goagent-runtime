@@ -12,7 +12,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 // MountPolicy 挂载白名单（issue #187）。

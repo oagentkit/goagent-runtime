@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 )
 
 // TestEventRoundTripsEventFields 行→Event 转换不改写字段（TailStore 契约第三条）：

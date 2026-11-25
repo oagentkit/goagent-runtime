@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/controlplane"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/controlplane"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // 编译期断言：BoardStore 满足原子强释接缝（TaskAuthority 面由 board.go 兑现）。

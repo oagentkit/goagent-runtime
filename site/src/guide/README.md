@@ -1,6 +1,6 @@
 # runtime 是什么
 
-**goagent-runtime 是 [goagent-kernel](https://github.com/yi-nology/goagent-kernel) 的装配层。**
+**goagent-runtime 是 [goagent-kernel](https://github.com/oagentkit/goagent-kernel) 的装配层。**
 
 kernel 提供的是「确定性机制」——状态机、幂等、栅栏、预算、恢复——这些机制能保证一个 Agent 在中断、重试、并发下**不重不漏**，但它们是一个个零件。runtime 把零件装成整车：你给一个模型接口、一组工具，就能 `Run` 起一个会话。
 

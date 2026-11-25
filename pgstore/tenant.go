@@ -22,7 +22,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/tenant"
+	"github.com/oagentkit/goagent-kernel/tenant"
 )
 
 // ErrTenantMismatch 声明的租户与上下文租户不一致（同一次操作两个租户结论）。

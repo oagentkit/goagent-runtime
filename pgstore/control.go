@@ -44,8 +44,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/controlplane"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/controlplane"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // poolSourceID 存储来源标识：同一连接池配置（host/port/database/schema）

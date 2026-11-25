@@ -1,4 +1,4 @@
-module github.com/yi-nology/goagent-runtime
+module github.com/oagentkit/goagent-runtime
 
 go 1.27.4
 
@@ -7,7 +7,8 @@ require (
 	github.com/oagentkit/guardx v0.28.0
 	github.com/oekit/concurrency v0.38.1
 	github.com/oekit/pkg v0.59.0
-	github.com/yi-nology/goagent-kernel v0.75.1
+	github.com/oagentkit/agent v0.16.0
+	github.com/oagentkit/goagent-kernel v0.77.0
 	modernc.org/sqlite v1.61.0
 )
 

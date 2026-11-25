@@ -12,13 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/cluster"
-	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/cluster"
+	"github.com/oagentkit/goagent-runtime/pipeline"
 )
 
 // 本文件是 cluster 模板的**高可用证据**（真 PostgreSQL，非替身）：

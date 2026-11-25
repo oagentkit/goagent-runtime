@@ -13,7 +13,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/oagentkit/goagent-kernel/checkpoint"
 )
 
 // TestSnapshotSaveIfNewerRejectsOverflowSeq 超范围序号必须报错且不落库。

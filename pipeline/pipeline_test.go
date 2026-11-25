@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/storage"
 )
 
 // countingHandler 计数的工具执行体（重放不得重复施加的证据）。

@@ -29,15 +29,15 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/roundguard"
+	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/oagentkit/agent/roundguard"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/observe"
-	"github.com/yi-nology/goagent-runtime/pipeline"
-	"github.com/yi-nology/goagent-runtime/storage"
-	"github.com/yi-nology/goagent-runtime/storage/sqlitestore"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/observe"
+	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/storage/sqlitestore"
 )
 
 // DefaultSideEffectTTL 工具副作用租约默认有效期。

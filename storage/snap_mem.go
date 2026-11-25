@@ -6,7 +6,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/oagentkit/goagent-kernel/checkpoint"
 )
 
 // memSnapStore 进度快照的内存存取（序号单调）。

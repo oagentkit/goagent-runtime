@@ -28,7 +28,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/tenant"
+	"github.com/oagentkit/goagent-kernel/tenant"
 )
 
 // tenCtx 注入租户上下文的 ctx（带超时：回归要**快速红**，而不是挂在 60s 超时上）。
