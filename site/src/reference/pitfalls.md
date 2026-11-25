@@ -5,7 +5,7 @@ title: 坑速查
 # 坑速查：症状 → 真因 → 处置
 
 ::: warning 本页由 `site/scripts/gen_reference_pages.mjs` 从 `site/data/pitfalls.json` 生成，勿手改
-坑表的唯一真相是 `site/data/pitfalls.json`；数据文件里的 kernel 地板版本（`v0.77.0`）与 go.mod 对账，对不上即判红。
+坑表的唯一真相是 `site/data/pitfalls.json`；数据文件里的 kernel 地板版本（`v0.78.0`）与 go.mod 对账，对不上即判红。
 :::
 
 本仓踩过的坑与它的前提都在这儿。接完线拿它自查一遍。
