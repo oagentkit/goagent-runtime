@@ -1,5 +1,7 @@
 # goagent-runtime
 
+Agent 运行时装配层 —— oagentkit 模块矩阵 **tier 5**（装配层，只接线不另写判据）。
+
 > 项目站点（GitHub Pages）：https://oagentkit.github.io/goagent-runtime/
 
 面向业务开发者的 **Agent 运行时装配层**，把 [goagent-kernel](https://github.com/oagentkit/goagent-kernel) 的确定性机制（状态/幂等/栅栏/预算/恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
