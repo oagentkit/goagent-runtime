@@ -108,6 +108,20 @@ jobs:
       - name: CHANGELOG 与 git 历史对账
         run: python3 /tmp/matrix-tools/scripts/gen_changelogs.py --repo goagent-runtime --root "$GITHUB_WORKSPACE/.." --check
 
+  bridge:
+    name: bridge（嵌套模块：LLM SDK 边只在 bridge 内）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+      - name: build + vet + test（bridge/llmchat + bridge/einotool）
+        working-directory: bridge
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
   site:
     name: 站点构建（生成页同步 + 链接门禁 + 构建）
     # 站点的「机器事实 / 门禁体系 / 坑速查」三页是**生成物**：由
