@@ -47,7 +47,7 @@ AI 编码代理在本仓工作时执行本节纪律。病灶=长会话中模型�
   >= 0 = 该次调用报错（零值 0 会在首次调用报错——不设就是注入，见
   本仓实录的两次踩坑）。
 - `go test ./... -count=1` 提交前必须全绿；PG 判据用例（`pgstore/`）在无 `GAK_PGREF_DSN` 时显式 skip，不伪造结果。
-- `pgstore/` 与 `sqliteadapter/` 是 kernel 迁移来的参考实现：对 kernel 的 import 只允许契约面（checkpoint/controlplane/eventbus/sideeffect/sidetest/taskboard/tenant），判据本体归 kernel，本仓不另写。
+- `pgstore/` 与 `sqliteadapter/` 是 kernel 迁移来的参考实现：对 kernel 的 import 只允许契约面（checkpoint/controlplane/eventbus/invocation/sideeffect/sidetest/taskboard/tenant），判据本体归 kernel，本仓不另写。
 - 站点部署在**子路径**（base=`/goagent-runtime/`）：**正文 markdown 链接必须自带 base 前缀**。
   markdown 链接被 markdown-it 输出成原生 `<a href>`，框架不加工它 ⇒ 写成 `/guide/x.html`
   会被浏览器解析到站点根之外 ⇒ **404**（实录 2026-11-23：首页「接下来」三条链接全 404）。

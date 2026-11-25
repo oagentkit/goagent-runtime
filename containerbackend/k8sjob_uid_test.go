@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 func backendJob() backend.Job { return backend.Job{Image: testK8sImage} }

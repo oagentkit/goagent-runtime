@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/controlplane"
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/controlplane"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // SeedRun 摆一条运行记录与它的任务（参考实现的装载入口，契约里没有

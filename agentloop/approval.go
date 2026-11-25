@@ -13,11 +13,11 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/contract"
-	"github.com/yi-nology/goagent-kernel/invocation"
+	"github.com/oagentkit/goagent-kernel/contract"
+	"github.com/oagentkit/goagent-kernel/invocation"
 
-	"github.com/yi-nology/goagent-runtime/chat"
-	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/pipeline"
 )
 
 // StatusAwaitingApproval 会话挂起等审批的快照/结果状态。对齐 kernel

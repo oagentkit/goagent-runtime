@@ -54,7 +54,7 @@ import (
 	kerrors "github.com/oekit/pkg/errors"
 
 	"github.com/oagentkit/guardx/sandbox"
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 const (

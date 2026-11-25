@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 )
 
 // countingTailStore 数 MaxID 调用的 TailStore 包装：重启续读必须走

@@ -28,7 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/taskboard"
 )
 
 // Submit 投递一条待认领任务（**宿主投递面**，不是 kernel 判据面）。
@@ -383,10 +383,40 @@ func (b *BoardStore) Release(ctx context.Context, id taskboard.TaskID, token str
 }
 
 // Complete 标记完成（凭令牌）：终态不带 owner，避免「谁做完的」与「谁还占着」混在一起。
+//
+// 凭据面 = 令牌 + 租约未过期（kernel v0.77 boardtest 新判据；判据走
+// taskboard.LeaseHeld 单点）：过期持有者的完成被拒——终态内容取决于
+// 「谁有资格提交」而不是「谁先提交」。校验与写回在同一事务（行锁）内，
+// 与 Renew 同一纪律。
 func (b *BoardStore) Complete(ctx context.Context, id taskboard.TaskID, token string) error {
 	_, err := withinTx(ctx, b.pool, func(tx pgx.Tx) (bool, error) {
-		if err := releaseOrComplete(ctx, tx, id, token, string(taskboard.StateDone)); err != nil {
+		r, err := lockTask(ctx, tx, id)
+		if err != nil {
 			return false, err
+		}
+		if r == nil {
+			return false, errors.Wrap(taskboard.ErrNotFound, "任务不存在", "task", string(id))
+		}
+		now, err := b.nowIn(ctx, tx)
+		if err != nil {
+			return false, err
+		}
+		if r.state != string(taskboard.StateClaimed) || r.token == nil || *r.token != token {
+			return false, errors.Wrap(taskboard.ErrLeaseLost, "租约令牌不匹配", "task", string(id))
+		}
+		if !r.held(now) {
+			return false, errors.Wrap(taskboard.ErrLeaseLost, "租约已过期，资格终止（任务可被接管）", "task", string(id))
+		}
+		tag, err := tx.Exec(ctx,
+			`UPDATE pgref_board_task
+			    SET state = $2, owner = NULL, token = NULL, until = NULL, seq = seq + 1
+			  WHERE id = $1`,
+			string(id), string(taskboard.StateDone))
+		if err != nil {
+			return false, errors.Wrap(err, "pgstore: 完成写回失败", "task", string(id))
+		}
+		if tag.RowsAffected() != 1 {
+			return false, errors.Wrap(taskboard.ErrLeaseLost, "完成写回未命中", "task", string(id))
 		}
 		return false, nil
 	})

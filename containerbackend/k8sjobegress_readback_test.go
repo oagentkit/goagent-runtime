@@ -12,7 +12,7 @@ import (
 
 	kerrors "github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 // TestK8sExecEgressPolicyReadBack 创建时实测校验（issue #262）：策略建出来

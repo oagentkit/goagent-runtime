@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/taskboard"
-	"github.com/yi-nology/goagent-kernel/taskboard/boardtest"
+	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/taskboard/boardtest"
 )
 
 // boardFactory 契约套件的工厂：每个子测试调一次，返回全新实现。

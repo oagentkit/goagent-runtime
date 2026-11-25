@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/yi-nology/goagent-kernel/invocation"
-	"github.com/yi-nology/goagent-kernel/invocation/invocationtest"
+	"github.com/oagentkit/goagent-kernel/invocation"
+	"github.com/oagentkit/goagent-kernel/invocation/invocationtest"
 )
 
 // freshJournalDB 造一份干净的账本库（每个子测试一份 ⇒ 互不干扰）。

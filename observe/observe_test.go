@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 
-	"github.com/yi-nology/goagent-runtime/observe"
+	"github.com/oagentkit/goagent-runtime/observe"
 )
 
 // TestAttachForwards 订阅转发：事件经 bus 到 sink。

@@ -29,9 +29,9 @@ import (
 
 	"github.com/oekit/concurrency/async"
 
-	"github.com/yi-nology/goagent-kernel/coord"
-	"github.com/yi-nology/goagent-kernel/taskboard"
-	"github.com/yi-nology/goagent-kernel/worker"
+	"github.com/oagentkit/goagent-kernel/coord"
+	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/oagentkit/goagent-kernel/worker"
 )
 
 func main() {

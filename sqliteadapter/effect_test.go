@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
-	"github.com/yi-nology/goagent-kernel/sidetest"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sidetest"
 )
 
 // openEffectStore 开一份全新的后端并建好表（契约套件的工厂约定：每个子测试一份）。

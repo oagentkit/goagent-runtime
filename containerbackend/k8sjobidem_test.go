@@ -18,7 +18,7 @@ import (
 
 	kerrors "github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/backend"
+	"github.com/oagentkit/goagent-kernel/backend"
 )
 
 const testExecID = "run-42-a1B2c3"

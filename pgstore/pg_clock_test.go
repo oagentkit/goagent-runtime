@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 )
 
 // TestNoProcessClockInProduction 源码判据：本包生产文件不得读进程本地时钟。

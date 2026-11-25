@@ -6,8 +6,8 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-runtime/agentloop"
-	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/oagentkit/goagent-runtime/agentloop"
+	"github.com/oagentkit/goagent-runtime/chat"
 )
 
 // TestNewRejectsIncompleteConfig 装配期 fail fast：缺模型面 / 缺 DSN 都是

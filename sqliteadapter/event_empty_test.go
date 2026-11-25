@@ -19,7 +19,7 @@ package sqliteadapter
 import (
 	"testing"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 )
 
 // TestEventWatermarkOnEmptyStoreIsZero 空库上的水位线必须读成 0（**不返 error**）。

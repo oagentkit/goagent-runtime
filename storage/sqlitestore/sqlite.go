@@ -11,12 +11,12 @@ package sqlitestore
 import (
 	"context"
 
-	"github.com/yi-nology/goagent-kernel/checkpoint"
-	"github.com/yi-nology/goagent-kernel/eventbus"
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/checkpoint"
+	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 
-	"github.com/yi-nology/goagent-runtime/sqliteadapter"
-	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/oagentkit/goagent-runtime/sqliteadapter"
+	"github.com/oagentkit/goagent-runtime/storage"
 )
 
 // SQLite standalone 形态的 Provider：真 SQLite WAL 单文件库。

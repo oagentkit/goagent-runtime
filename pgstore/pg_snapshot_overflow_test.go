@@ -28,7 +28,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/oagentkit/goagent-kernel/checkpoint"
 )
 
 // overflowSeq 超出有符号 64 位上限的序号（= MaxInt64 + 1，转成 int64 即负数）。

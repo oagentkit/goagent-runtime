@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/oagentkit/goagent-kernel/sideeffect"
 )
 
 // TestPGE2ESigkillMidApply 死在施加之前：意图在库里，下游没有写入。

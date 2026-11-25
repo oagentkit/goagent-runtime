@@ -1,8 +1,8 @@
 # goagent-runtime
 
-> 项目站点（GitHub Pages）：https://yi-nology.github.io/goagent-runtime/
+> 项目站点（GitHub Pages）：https://oagentkit.github.io/goagent-runtime/
 
-面向业务开发者的 **Agent 运行时装配层**，把 [goagent-kernel](https://github.com/yi-nology/goagent-kernel) 的确定性机制（状态/幂等/栅栏/预算/恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
+面向业务开发者的 **Agent 运行时装配层**，把 [goagent-kernel](https://github.com/oagentkit/goagent-kernel) 的确定性机制（状态/幂等/栅栏/预算/恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
 
 ```
 宿主产品            只写领域：系统提示、工具实现、模型供应商适配
@@ -22,7 +22,7 @@ cluster 的前置是 kernel 侧两项 P0 已修复并发布（控制面权威介
 ## 版本与发布
 
 - **发布说明**：GitHub Releases（每个版本的第一段是「下游要做什么」）与仓内 [CHANGELOG.md](CHANGELOG.md)——后者由家族工具 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，**勿手改**；站点的「版本记录」页是它的投影。
-- **版本指针**：当前最新版本见 [Releases 页](https://github.com/yi-nology/goagent-runtime/releases)。本 README **不硬写版本号**——版本号的事实源是 tag 与 CHANGELOG，抄第二份只会漂。
+- **版本指针**：当前最新版本见 [Releases 页](https://github.com/oagentkit/goagent-runtime/releases)。本 README **不硬写版本号**——版本号的事实源是 tag 与 CHANGELOG，抄第二份只会漂。
 - **一条纪律**：`go get` 拿到的模块里，CHANGELOG 必须含该 tag 自己那一段——tag 打在 CHANGELOG 生成之前就会缺段（`v0.6.3` 就是这么缺了一段，其修复随 `v0.6.4` 出货）。CI 的「CHANGELOG 同步校验」作业就是这条纪律的执行体。
 ## 为什么是独立仓
 
@@ -108,6 +108,8 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 | `cluster` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） |
 | `observe` | eventbus → 宿主回调 |
 | `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** |
+| `bridge/llmchat` | 家族钦定适配器：`oagentkit/llm`（eino 栈）→ `chat.Model`（**嵌套模块**——LLM SDK 边只在 bridge 内，主 module 零 LLM SDK import 的声明面不变） |
+| `bridge/einotool` | 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜，宿主按业务补） |
 
 ## 判据的归属（不发明第二套）
 
@@ -116,7 +118,12 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 - `storage` 的内存、`sqliteadapter`、`pgstore` 三个副作用闸实现都跑 kernel 的 `sidetest` 共享契约套件（33 子测试，含带凭据裁决）；PG 上另有 SIGKILL 故障恢复 e2e（integration CI）；
 - 内存快照存取的单调/拒零序号判据移植自 kernel `examples/reference-runtime`（MIT、同作者）；
 - 恢复语义由 `agentloop` / `runtime` 的端到端用例钉住；
-- cluster 模板的判据同样来自 kernel（`taskboard` 抢占/租约/接管代次、`sideeffect` 幂等闸、`roundguard` 预算、`eventbus` 事件面）——本仓只做接线，证据在真 PG 集成用例里。
+- cluster 模板的判据同样来自 kernel（`taskboard` 抢占/租约/接管代次、`sideeffect` 幂等闸、`roundguard` 预算、`eventbus` 事件面）——本仓只做接线，证据在真 PG 集成用例里；
+- `roundguard` 自 v0.77.0 起上抛 `github.com/oagentkit/agent/roundguard`（归属评测 2026-11-26：单 agent 循环判据，与编排无关）。
+
+## 模型与工具的接缝（钦定适配器）
+
+宿主有两条接入路径：**直接实现** `chat.Model` / `pipeline.Tool`（供应商中立，本仓不 import 任何 SDK——ADR-0001/0003），或**经 bridge 嵌套模块**复用 eino 生态（llm 降级链/预算、既有 eino 工具一族接入）。bridge 在独立 go.mod 里，不用它的宿主依赖图里没有 llm/eino。
 
 ## 运行
 

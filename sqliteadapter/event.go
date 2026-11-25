@@ -60,7 +60,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/oagentkit/goagent-kernel/eventbus"
 )
 
 // EventStore eventbus 可靠事件面（Outbox 形态）的 SQLite 参考实现：
