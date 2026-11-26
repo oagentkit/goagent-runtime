@@ -8,7 +8,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // 本文件钉住 #223：执行意图四列**同存同缺**，半写行 fail-closed。

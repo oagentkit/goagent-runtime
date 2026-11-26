@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
-	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
 // TestFinishRollsBackEventWhenCompletionFails 原子收尾的判据：收尾失败

@@ -8,13 +8,13 @@ import (
 
 	kerrors "github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 
-	"github.com/oagentkit/goagent-runtime/agentloop"
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
-	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/agentloop"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/storage"
 )
 
 // jointSpy 记录联合提交面收到的事件（提交面污染的可观测面）。

@@ -9,8 +9,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/oagentkit/goagent-kernel/invocation"
-	"github.com/oagentkit/goagent-kernel/invocation/invocationtest"
+	"github.com/yi-nology/goagent-kernel/invocation"
+	"github.com/yi-nology/goagent-kernel/invocation/invocationtest"
 )
 
 // freshJournal 造一份干净的账本存储（独立 schema ⇒ 各子测试互不干扰）。

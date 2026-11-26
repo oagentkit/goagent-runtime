@@ -3,9 +3,9 @@ package storage_test
 import (
 	"testing"
 
-	"github.com/oagentkit/goagent-kernel/sidetest"
+	"github.com/yi-nology/goagent-kernel/sidetest"
 
-	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/storage"
 )
 
 // TestMemEffectsSatisfyKernelContract 用 kernel 的 sidetest 共享契约套件

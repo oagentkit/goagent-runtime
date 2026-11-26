@@ -14,8 +14,8 @@ package pgstore
 import (
 	"context"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // CommitWithEvents 快照与事件单事务提交。快照走 SaveIfNewer（CAS：陈旧写

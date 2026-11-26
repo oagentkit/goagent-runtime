@@ -39,11 +39,11 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/contract"
-	"github.com/oagentkit/goagent-kernel/invocation"
+	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/invocation"
 
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // journalPlan 落一条待执行调用（身份一经落账不可变）。

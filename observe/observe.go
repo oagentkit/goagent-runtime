@@ -10,7 +10,7 @@ import (
 
 	"github.com/oekit/concurrency/async"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // Sink 宿主的事件消费面。

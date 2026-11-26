@@ -8,7 +8,7 @@ package chat_test
 import (
 	"testing"
 
-	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/chat"
 )
 
 // TestDeltaAggregatorMergesToolCallsByIndex 工具调用片段按 Index 归并：

@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 
-	"github.com/oagentkit/goagent-runtime/agentloop"
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
-	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/agentloop"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/storage"
 )
 
 // recordingJoint 记录联合提交收到的快照与事件（判据②的取证面）。

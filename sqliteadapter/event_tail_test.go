@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // TestEventTailerEndToEnd 承诺形态端到端：尾随按铸造序补灌，回滚不造成空洞。

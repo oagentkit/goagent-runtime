@@ -24,9 +24,9 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 
-	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/chat"
 )
 
 // Kind 一次工具执行的结果类别（判定词表，本包自有命名）。

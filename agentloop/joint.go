@@ -8,8 +8,8 @@ package agentloop
 import (
 	"context"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // JointCommitter 快照+事件单事务提交面。Config.Joint 非 nil 时：

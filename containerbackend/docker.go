@@ -20,7 +20,7 @@
 //
 // # 接线方式（宿主视角）
 //
-// 本包实现的是 `github.com/oagentkit/goagent-kernel/backend.Backend`。
+// 本包实现的是 `github.com/yi-nology/goagent-kernel/backend.Backend`。
 // 宿主把它（或自己照抄的实现）登记进 backend.Registry，再按
 // backend.Spec 解析执行方：
 //
@@ -51,7 +51,7 @@ import (
 	"github.com/oekit/pkg/errors"
 
 	"github.com/oagentkit/guardx/sandbox"
-	"github.com/oagentkit/goagent-kernel/backend"
+	"github.com/yi-nology/goagent-kernel/backend"
 )
 
 // ErrEngineCall Docker Engine 调用失败（创建 / 启动 / 等待 / 读取任一步失败）。

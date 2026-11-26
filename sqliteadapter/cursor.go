@@ -44,7 +44,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // TailCursorStore eventbus.CursorStore 的 SQLite 参考实现：绑定一个 consumer

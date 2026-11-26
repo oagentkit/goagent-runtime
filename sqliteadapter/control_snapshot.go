@@ -19,8 +19,8 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/controlplane"
-	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/controlplane"
+	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
 // readSnapshotTx 开一个**一致快照**的只读事务（延迟读事务）。

@@ -47,7 +47,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // EventStore eventbus 可靠事件面（Outbox 形态）的 PostgreSQL 参考实现：

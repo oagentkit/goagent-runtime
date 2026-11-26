@@ -38,7 +38,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
 )
 
 // TestPGE2ETwoProcessSnapshotSameSeq 跨进程并发提交同一序号：恰好一个赢家。

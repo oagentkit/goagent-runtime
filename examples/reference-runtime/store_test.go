@@ -7,11 +7,11 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/sideeffect"
-	"github.com/oagentkit/goagent-kernel/sidetest"
-	"github.com/oagentkit/goagent-kernel/taskboard"
-	"github.com/oagentkit/goagent-kernel/taskboard/boardtest"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sidetest"
+	"github.com/yi-nology/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/taskboard/boardtest"
 )
 
 // TestSideEffectStoreContract 跑副作用闸的**共享契约套件**：

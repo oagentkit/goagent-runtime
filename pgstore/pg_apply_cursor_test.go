@@ -27,8 +27,8 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
-	"github.com/oagentkit/goagent-kernel/tenant"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/tenant"
 )
 
 // assertCursorWriteRejectedInBatch 批内写游标 ⇒ 显式拒绝 + 整批回滚 + 游标没写。

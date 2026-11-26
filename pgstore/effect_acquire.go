@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // intentCompleteErr 意图四列齐全性守卫（Acquire 判定路径的解引用前置）。

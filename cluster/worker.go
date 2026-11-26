@@ -9,14 +9,14 @@ import (
 	"github.com/oekit/concurrency/async"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
-	"github.com/oagentkit/goagent-kernel/taskboard"
-	kw "github.com/oagentkit/goagent-kernel/worker"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/taskboard"
+	kw "github.com/yi-nology/goagent-kernel/worker"
 
-	"github.com/oagentkit/goagent-runtime/agentloop"
-	"github.com/oagentkit/goagent-runtime/observe"
-	"github.com/oagentkit/goagent-runtime/pgstore"
-	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/agentloop"
+	"github.com/yi-nology/goagent-runtime/observe"
+	"github.com/yi-nology/goagent-runtime/pgstore"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // executor 一个执行工位：独占一个 agentloop.Loop（同一 Loop 的 Run 不得并发）。

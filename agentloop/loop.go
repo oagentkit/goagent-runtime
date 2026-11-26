@@ -34,14 +34,14 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/contract"
-	"github.com/oagentkit/goagent-kernel/eventbus"
-	"github.com/oagentkit/goagent-kernel/invocation"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/invocation"
 	"github.com/oagentkit/agent/roundguard"
 
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // fieldHistory 快照 Fields 里会话历史的键。

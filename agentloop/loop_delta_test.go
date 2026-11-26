@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/contract"
 
-	"github.com/oagentkit/goagent-runtime/agentloop"
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
-	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/agentloop"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/storage"
 )
 
 // streamModel 支持流式的脚本模型：Chat 时若 OnDelta 非 nil 先逐片回调，

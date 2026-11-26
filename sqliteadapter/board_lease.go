@@ -23,7 +23,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
 // Claim 认领一个任务（读-判-写不可分割：一个事务完成）。

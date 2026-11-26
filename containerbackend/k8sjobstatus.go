@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/backend"
+	"github.com/yi-nology/goagent-kernel/backend"
 )
 
 // await 轮询 Job 直到终态或对账给不出结论。

@@ -33,7 +33,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
 )
 
 // SnapStore checkpoint.StoreCAS 的 SQLite 参考实现。

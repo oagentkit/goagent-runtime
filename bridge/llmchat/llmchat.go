@@ -27,7 +27,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	ejsonschema "github.com/eino-contrib/jsonschema"
-	"github.com/oagentkit/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/oagentkit/llm"
 )
 

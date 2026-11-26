@@ -11,7 +11,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // ResolveUncertain 裁决「结果未知」的键。**先到者为准**（简化入口，

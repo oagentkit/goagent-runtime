@@ -37,7 +37,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/invocation"
+	"github.com/yi-nology/goagent-kernel/invocation"
 )
 
 // JournalStore 工具调用账本的 PostgreSQL 实现（invocation.Store）。

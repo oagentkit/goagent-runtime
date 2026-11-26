@@ -22,7 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
 )
 
 // SnapStore checkpoint.StoreCAS 的 PostgreSQL 参考实现。
