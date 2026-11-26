@@ -28,7 +28,7 @@ const ADR_OUT = join(SITE, 'src', 'adr')
 const PUBLIC = join(SITE, 'src', '.vuepress', 'public')
 const MANIFEST = join(SITE, 'src', '.vuepress', 'adr-manifest.json')
 const DATA = join(SITE, 'data', 'pitfalls.json')
-const KERNEL_MOD = 'github.com/oagentkit/goagent-kernel'
+const KERNEL_MOD = 'github.com/yi-nology/goagent-kernel'
 
 const read = (p) => readFileSync(p, 'utf8')
 const readRepo = (p) => read(join(REPO, p))
@@ -605,7 +605,7 @@ function loadReleases(src) {
   return out
 }
 // ── 页：决策记录（ADR）─────────────────────────────────────────────────
-const GH_REPO = 'https://github.com/oagentkit/goagent-runtime'
+const GH_REPO = 'https://github.com/yi-nology/goagent-runtime'
 
 function renderAdrIndex(adrs) {
   const L = [

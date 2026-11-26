@@ -20,8 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // 子进程模式的环境变量（父进程写、子进程读；DSN 复用 dsnEnv）。

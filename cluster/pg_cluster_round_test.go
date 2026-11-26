@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/cluster"
-	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/cluster"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // roundModel 按 Chat 调用次序给出可区分的终答（第 N 次 Chat ⇒ 「chat-N」）。

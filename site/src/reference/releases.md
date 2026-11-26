@@ -27,4 +27,4 @@ title: 版本记录
 | `v0.2.0` | 2026-11-22 | feat：收编 pgstore 与 sqliteadapter 参考实现（自 goagent-kernel 迁入） |
 | `v0.1.0` | 2026-11-21 | goagent-runtime v0.1.0：goagent-kernel 的 Agent 运行时装配层 |
 
-> 完整变更：仓内 [CHANGELOG.md](https://github.com/oagentkit/goagent-runtime/blob/main/CHANGELOG.md)。
+> 完整变更：仓内 [CHANGELOG.md](https://github.com/yi-nology/goagent-runtime/blob/main/CHANGELOG.md)。

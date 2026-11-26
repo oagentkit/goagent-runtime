@@ -19,7 +19,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // ensureActionRow 保证动作行存在（Acquire 的自增主键语义：「没做过」就是空行——

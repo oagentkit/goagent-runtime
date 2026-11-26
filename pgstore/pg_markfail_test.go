@@ -37,8 +37,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
-	"github.com/oagentkit/goagent-kernel/sidetest"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sidetest"
 )
 
 // markFailReason 注入用的失败原因串：它同时是 CHECK 约束的禁写值与

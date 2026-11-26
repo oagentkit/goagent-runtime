@@ -25,7 +25,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // effectStore 副作用闸：幂等键 + 资源独占 + 栅栏令牌 + 执行意图。

@@ -16,7 +16,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/oagentkit/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/pipeline"
 )
 
 // Adapt 把一个 eino InvokableTool 适配成 pipeline.Tool。

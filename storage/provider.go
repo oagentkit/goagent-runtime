@@ -16,9 +16,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/eventbus"
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // Provider runtime 需要的存储面汇总。三个面各自独立——

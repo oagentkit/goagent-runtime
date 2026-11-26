@@ -10,7 +10,7 @@ import (
 	kerrors "github.com/oekit/pkg/errors"
 
 	"github.com/oagentkit/guardx/sandbox"
-	"github.com/oagentkit/goagent-kernel/backend"
+	"github.com/yi-nology/goagent-kernel/backend"
 )
 
 func TestK8sJobDeclarations(t *testing.T) {

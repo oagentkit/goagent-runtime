@@ -26,7 +26,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // evtCtx 用例的 ctx（带超时：回归要**快速红**，而不是挂在 60s 超时上）。

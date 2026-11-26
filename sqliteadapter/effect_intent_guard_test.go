@@ -25,7 +25,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // TestActionRowIntentColumnsAllOrNone 穷举 16 种列填充组合（确定性、无数据库）。

@@ -15,8 +15,8 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/controlplane"
-	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/controlplane"
+	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
 // SeedRun 摆一条运行记录与它的任务（装载入口）。

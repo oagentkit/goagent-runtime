@@ -34,7 +34,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/invocation"
+	"github.com/yi-nology/goagent-kernel/invocation"
 )
 
 // JournalStore 工具调用账本的 SQLite 实现（invocation.Store）。

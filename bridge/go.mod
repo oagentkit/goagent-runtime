@@ -1,4 +1,4 @@
-module github.com/oagentkit/goagent-runtime/bridge
+module github.com/yi-nology/goagent-runtime/bridge
 
 // 嵌套模块：LLM SDK 边（llm → cloudwego/eino）只出现在 bridge 内，
 // 主 module 的「模型接缝只有 chat.Model、零 LLM SDK import」声明面不变
@@ -11,7 +11,7 @@ go 1.27.4
 require (
 	github.com/cloudwego/eino v0.9.23
 	github.com/eino-contrib/jsonschema v1.0.3
-	github.com/oagentkit/goagent-runtime v0.7.0
+	github.com/yi-nology/goagent-runtime v0.7.0
 	github.com/oagentkit/llm v0.27.0
 )
 
@@ -38,7 +38,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
-	github.com/oagentkit/goagent-kernel v0.77.0 // indirect
+	github.com/yi-nology/goagent-kernel v0.77.0 // indirect
 	github.com/oagentkit/textx v0.12.0 // indirect
 	github.com/oekit/concurrency v0.40.0 // indirect
 	github.com/oekit/logx v0.12.1 // indirect

@@ -21,7 +21,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/taskboard"
+	"github.com/yi-nology/goagent-kernel/taskboard"
 )
 
 // TestBoardClaimBlockedWhenDependencyMissing 依赖不存在 ⇒ 认领必须被拒。

@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oagentkit/goagent-kernel/sidetest"
+	"github.com/yi-nology/goagent-kernel/sidetest"
 
-	"github.com/oagentkit/goagent-runtime/storage"
-	"github.com/oagentkit/goagent-runtime/storage/sqlitestore"
+	"github.com/yi-nology/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/storage/sqlitestore"
 )
 
 // TestOpenProviderFaces Provider 三面齐备（runtime 装配的前提）。

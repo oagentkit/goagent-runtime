@@ -17,7 +17,7 @@ import (
 	kerrors "github.com/oekit/pkg/errors"
 
 	"github.com/oagentkit/guardx/sandbox"
-	"github.com/oagentkit/goagent-kernel/backend"
+	"github.com/yi-nology/goagent-kernel/backend"
 )
 
 // stubCNICapability 能力探测替身：注入「CNI 是否实现 NetworkPolicy」的答案。

@@ -6,7 +6,7 @@ Agent 运行时装配层 —— oagentkit 模块矩阵 **tier 5**（装配层，
 
 > 项目站点（GitHub Pages）：https://oagentkit.github.io/goagent-runtime/
 
-面向业务开发者的 **Agent 运行时装配层**，把 [goagent-kernel](https://github.com/oagentkit/goagent-kernel) 的确定性机制（状态/幂等/栅栏/预算/恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
+面向业务开发者的 **Agent 运行时装配层**，把 [goagent-kernel](https://github.com/yi-nology/goagent-kernel) 的确定性机制（状态/幂等/栅栏/预算/恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
 
 ```
 宿主产品            只写领域：系统提示、工具实现、模型供应商适配
@@ -26,7 +26,7 @@ cluster 的前置是 kernel 侧两项 P0 已修复并发布（控制面权威介
 ## 版本与发布
 
 - **发布说明**：GitHub Releases（每个版本的第一段是「下游要做什么」）与仓内 [CHANGELOG.md](CHANGELOG.md)——后者由家族工具 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，**勿手改**；站点的「版本记录」页是它的投影。
-- **版本指针**：当前最新版本见 [Releases 页](https://github.com/oagentkit/goagent-runtime/releases)。本 README **不硬写版本号**——版本号的事实源是 tag 与 CHANGELOG，抄第二份只会漂。
+- **版本指针**：当前最新版本见 [Releases 页](https://github.com/yi-nology/goagent-runtime/releases)。本 README **不硬写版本号**——版本号的事实源是 tag 与 CHANGELOG，抄第二份只会漂。
 - **一条纪律**：`go get` 拿到的模块里，CHANGELOG 必须含该 tag 自己那一段——tag 打在 CHANGELOG 生成之前就会缺段（`v0.6.3` 就是这么缺了一段，其修复随 `v0.6.4` 出货）。CI 的「CHANGELOG 同步校验」作业就是这条纪律的执行体。
 ## 为什么是独立仓
 

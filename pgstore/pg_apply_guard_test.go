@@ -22,7 +22,7 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 )
 
 // TestApplyReturnsCallbackErrorVerbatim 回调的错误**原样**传出（不被包装）。

@@ -16,14 +16,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/checkpoint"
-	"github.com/oagentkit/goagent-kernel/contract"
-	"github.com/oagentkit/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/contract"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 
-	"github.com/oagentkit/goagent-runtime/agentloop"
-	"github.com/oagentkit/goagent-runtime/chat"
-	"github.com/oagentkit/goagent-runtime/pipeline"
-	"github.com/oagentkit/goagent-runtime/storage/sqlitestore"
+	"github.com/yi-nology/goagent-runtime/agentloop"
+	"github.com/yi-nology/goagent-runtime/chat"
+	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/storage/sqlitestore"
 )
 
 // jointFakeModel 脚本化模型（与 agentloop 测试同款判据，包内独立最小形态）。

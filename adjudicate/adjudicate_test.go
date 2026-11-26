@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 
-	"github.com/oagentkit/goagent-runtime/adjudicate"
-	"github.com/oagentkit/goagent-runtime/storage"
+	"github.com/yi-nology/goagent-runtime/adjudicate"
+	"github.com/yi-nology/goagent-runtime/storage"
 )
 
 type fakeSource struct {

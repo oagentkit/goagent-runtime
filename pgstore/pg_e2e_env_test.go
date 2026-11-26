@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/oagentkit/goagent-kernel/sideeffect"
+	"github.com/yi-nology/goagent-kernel/sideeffect"
 )
 
 // ── 父进程侧 ────────────────────────────────────────────────────────────

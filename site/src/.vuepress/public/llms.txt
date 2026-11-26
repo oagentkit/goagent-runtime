@@ -4,7 +4,7 @@
 > （状态 / 幂等 / 预算 / 恢复）装配成「一个普通 Go 团队不读几十个包也能用」的运行时。
 > **判据不另写一套**——状态机 / 幂等闸 / 回合守卫 / 恢复 / 抢占接管全部来自 goagent-kernel，
 > 本仓只做接线。
-> 文档站: https://oagentkit.github.io/goagent-runtime  |  GitHub: https://github.com/oagentkit/goagent-runtime
+> 文档站: https://oagentkit.github.io/goagent-runtime  |  GitHub: https://github.com/yi-nology/goagent-runtime
 
 > 本文件由 `site/scripts/gen_reference_pages.mjs` 生成，数字取自 README / go.mod /
 > Makefile / ci.yml / CHANGELOG.md / docs/adr，随构建刷新。
@@ -37,12 +37,12 @@
 - 门禁体系: https://oagentkit.github.io/goagent-runtime/reference/gates.html
 - 决策记录（ADR，设计推导与取舍）: https://oagentkit.github.io/goagent-runtime/reference/adr.md
 - 版本记录: https://oagentkit.github.io/goagent-runtime/reference/releases.html
-- 完整仓内事实: https://github.com/oagentkit/goagent-runtime#readme
+- 完整仓内事实: https://github.com/yi-nology/goagent-runtime#readme
 
 ## 事实快照
-- 模块: `github.com/oagentkit/goagent-runtime` · Go `1.27.4` · MIT
+- 模块: `github.com/yi-nology/goagent-runtime` · Go `1.27.4` · MIT
 - 能力包 14 个（生产代码 13918 行 / 70 个文件）
-- kernel 地板版本: `v0.79.0`；判据全部来自 kernel 契约面
+- kernel 地板版本: `v0.80.0`；判据全部来自 kernel 契约面
 - 第一方依赖 7 个（直接）/ 15 个（间接）
 - 模板: `NewEmbedded`（内存）/ `NewStandalone`（SQLite 单文件）/ `cluster`（PG + worker 池，多副本）
 - 已发布版本 15 个，最新 `v0.7.1`；决策记录 9 篇

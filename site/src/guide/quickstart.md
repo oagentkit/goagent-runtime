@@ -8,7 +8,7 @@
 ## 第一步：跑 embedded 演示
 
 ```bash
-git clone https://github.com/oagentkit/goagent-runtime.git
+git clone https://github.com/yi-nology/goagent-runtime.git
 cd goagent-runtime
 CGO_ENABLED=0 go run ./examples/embedded-demo
 ```
