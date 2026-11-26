@@ -2,6 +2,65 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.8.0] — 2026-11-26
+
+### 新增(cluster)：claimNext 单次 Claim + README 裁定段（#24 方案 C①）
+
+* feat(cluster): claimNext 单次 Claim 形态 + README 裁定段——runtime#24 方案 C①落地
+- claimNext：筛出首个可领候选后只 Claim 一次（对齐 kernel/worker.Loop），
+  消掉竞争激烈时每拍 n 个 FOR UPDATE 认领事务（认领风暴）；
+- README cluster 节补「为何不整段换 kernel/worker.Loop」（Loop 同样 O(n) List
+  + 强制 Registry 不存在 = 语义扩容；家族先例 kernel#507 同形不抽）；
+- O(n) List 根治=pgstore 实现 taskboard.ReadyBoard.ClaimReady，另行排期。
+Fixes #24（方案 C① 落地；C② ReadyBoard 挂账后续 PR）
+* docs(site): 生成页随 claimNext/README 改动重生成（16 产物同步）
+
+### 修复(sqliteadapter)：Complete 的写回判定与 pgstore 对齐——写回没落到判定时那行 ⇒ ErrLeaseLost
+
+runtime 侧三处实现（`pgstore` / `sqliteadapter` / `examples/reference-runtime`）
+在 kernel v0.78.0（v0.76.0 ⊂ v0.78.0）上已按新契约落地，共享套件的新子判据
+「租约过期后完成被拒」在本仓 **PASS**。
+本 PR 只收一处**两侧口径不一致**：同一个事实——「这次完成确实落在**判定时那一份**
+行上」——pgstore 判了（行锁 `FOR UPDATE` + 命中行数 ≠ 1 ⇒ `ErrLeaseLost`），
+sqliteadapter 没判（`UPDATE` 只带 `WHERE id = ?`，且不看命中行数）⇒ 同一事实两份
+判据，必然漂移。
+处置：sqliteadapter 的写回改成**条件写**（`UPDATE` 带 token + state 谓词，与同
+文件 `Release` 路径的 `releaseOrComplete` 同款）+ 命中行数判定（≠ 1 ⇒
+`ErrLeaseLost`，不静默成功）。
+影响：happy path 行为不变；只在「判定与写回之间那行被换了令牌或状态」时，由静默
+成功改为 `ErrLeaseLost`。
+顺带更正注释：那条判据落在 kernel **v0.76.0**（原注释写 v0.77）。
+验证：
+- `make check` 全绿（vet + 全量测试含真 PG + 依赖面门禁）；
+- 共享套件新子判据「租约过期后完成被拒」在 sqliteadapter 与 pgstore 均 PASS；
+- `go build` / `go vet` 通过；改动文件 `gofmt` 干净。
+Co-authored-by: zhangyi01 <zhangyi01@kylinos.cn>
+
+### 重构(boundary)!：org 归属回迁——module path 变回 yi-nology（v0.8.0）
+
+* refactor(boundary)!: org 归属回迁——module path 变回 yi-nology（v0.8.0 破窗）
+仓库已迁回 yi-nology（runtime#34 公告）。module path：
+github.com/oagentkit/goagent-runtime → github.com/yi-nology/goagent-runtime；
+bridge 嵌套模块同步（.../bridge）。
+- 全仓自身路径重写（代码/配置/文档/生成页，含对 kernel 的引用回改）；
+- 生成页重生成（16 产物同步）；
+- build/vet 全绿（scratch replace 指向本地已回改 kernel 验证；
+  runtime tag 等 kernel v0.80.0 先行后发）。
+v0.8.0 起回 yi-nology 路径；v0.7.0-0.7.1 的 oagentkit tag 只能经 oagentkit
+路径消费（go.mod 声明即事实）。
+* build: kernel 地板追到 v0.80.0（回迁后 yi-nology path 首版）
+* build: kernelFloor → v0.80.0 + 生成页重生成
+
+- 构建：依赖地板追到最新——goagent-kernel v0.79.0（v0.78.0 之后 kernel 发了地板收口版）
+
+- 文档：补「本仓依赖的矩阵内仓」声明——矩阵 README↔go.mod 对账门禁（agent/goagent-kernel/guardx）
+- 文档：矩阵层位声明行——tier 5（装配层）
+
+矩阵 verify_repo_tiers 门禁要求 AGENTS.md「矩阵分层：**tier N（层名）**」
+规范行 + README.md「—— oagentkit 模块矩阵 **tier N**（层名…）」定位行。
+modules.json tiers 映射同步补 4/5。
+
+
 ## [v0.7.1] — 2026-11-26
 
 - 构建：依赖地板追到最新——kernel v0.78.0 / guardx v0.30.0 / pkg v0.61.5（入驻 oagentkit 矩阵后的地板时效对齐）
