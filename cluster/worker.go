@@ -108,7 +108,12 @@ func (c *Cluster) runWorker(ctx context.Context, w *executor) {
 //
 // 认领用 kernel 的 taskboard 判据：Claim 原子（并发认领同一任务只有
 // 一个赢家）、令牌与接管代次由存储铸造。被别人抢走（ErrTaken）不是错误
-// —— 换一个任务即可。
+// ——下拍再来。
+//
+// **单次 Claim 形态**（runtime#24 方案 C①）：筛出第一个可领候选后只对它
+// Claim 一次。列表量随任务数单调涨的 O(n) List 是另一层病灶（方案 C②：
+// pgstore 实现 taskboard.ReadyBoard.ClaimReady 带就绪索引的单查询），
+// 与本改动正交、另行排期（见 issue runtime#24 裁定）。
 func (c *Cluster) claimNext(ctx context.Context, w *executor) (taskboard.Task, bool) {
 	tasks, err := c.board.List(ctx)
 	if err != nil {
@@ -130,7 +135,10 @@ func (c *Cluster) claimNext(ctx context.Context, w *executor) (taskboard.Task, b
 		claimed, err := c.board.Claim(ctx, t.ID, taskboard.AgentID(w.id), taskboard.ClaimRequest{TTL: c.cfg.LeaseTTL})
 		if err != nil {
 			// ErrTaken = 别的副本抢到了；ErrNotFound/ErrTerminal = 状态已变。
-			continue
+			// **单次 Claim 形态**（runtime#24 方案 C①，对齐 kernel/worker.Loop）：
+			// 不再逐个试后续候选——那会在竞争激烈时每拍打出 n 个 FOR UPDATE
+			// 认领事务（认领风暴）；被抢说明竞争在场，本拍收工下拍再来。
+			return taskboard.Task{}, false
 		}
 		return claimed, true
 	}

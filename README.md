@@ -58,6 +58,8 @@ cluster 的前置是 kernel 侧两项 P0 已修复并发布（控制面权威介
 - **前提**：接管后要「不重复施加副作用」，靠宿主声明**业务幂等键**（`pipeline.Tool.IdempotencyKey`，如订单号这类稳定键）——声明后同一业务动作无论由哪个副本施加都算同一次，闸判 `replayed`。未声明时沿用编排侧铸造的 `toolCallID`，此时跨副本接管这一步依赖模型给出稳定的 `tool_call_id`。
 - **证据**：集成用例跑**真 PostgreSQL**（`cluster/pg_cluster_test.go`）：投递 → worker 执行 → 结果经事件面回传；两个独立副本抢同一会话时工具只被施加一次；副本领了任务却不收场（模拟被 SIGKILL）后另一副本接管，已施加的副作用不再施加。CI 的 integration job 提供真 PostgreSQL 跑这批用例；没有库时用例显式 skip，不伪造结果。
 
+- **为何不整段换 kernel/worker.Loop（runtime#24 裁定，2026-11-26）**：Loop 同样走 List 全量（治不了列表量随任务数单调涨的 O(n)），且 `NewLoop` 强制要 Registry——cluster 架构里 worker 存活只靠租约过期推断，多副本 PG Registry 不存在，换 Loop 是语义扩容不是重构。家族先例（kernel#507）已裁「同形不抽、各自成文」，第三套池沿同一口径。已落地的改进：**单次 Claim 形态**（claimNext 筛出首个可领候选后只 Claim 一次，消掉竞争下的认领风暴，对齐 kernel/worker.Loop）；O(n) List 的根治是 pgstore 实现 `taskboard.ReadyBoard.ClaimReady`（带就绪索引的单查询），另行排期。
+
 ## 最小接入
 
 ```go
