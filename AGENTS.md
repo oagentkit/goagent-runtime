@@ -1,6 +1,7 @@
 # AGENTS.md —— goagent-runtime 工作纪律
 
 > 矩阵分层：**tier 5（装配层）**
+> 本仓依赖的矩阵内仓：`agent` `goagent-kernel` `guardx`
 
 本仓是 goagent-kernel 的**装配层**：把内核机制接线成业务方可直接用的运行时。
 内核判据（状态/幂等/栅栏/预算/恢复）一律归 kernel，本仓**不发明第二套**。
