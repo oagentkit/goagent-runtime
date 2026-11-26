@@ -159,9 +159,13 @@ func (b *BoardStore) Release(ctx context.Context, id taskboard.TaskID, token str
 
 // Complete 标记完成（凭令牌）：终态不带 owner，避免「谁做完的」与「谁还占着」混在一起。
 //
-// 凭据面 = 令牌 + 租约未过期（kernel v0.77 boardtest 新判据；判据走
+// 凭据面 = 令牌 + 租约未过期（kernel v0.76 boardtest 新判据；判据走
 // taskboard.LeaseHeld 单点，本包用 boardRow.held 承接）：过期持有者的
 // 完成被拒——校验与写回在同一事务内，与 Renew 同一纪律。
+//
+// 写回判定与 pgstore **同一判据**：「这次完成确实落在判定时那一份行上」——
+// 那边靠行锁（FOR UPDATE）+ 命中行数，这边靠条件写（带 token/state 谓词）+
+// 命中行数；落不进去一律 ErrLeaseLost，不静默成功。
 func (b *BoardStore) Complete(ctx context.Context, id taskboard.TaskID, token string) error {
 	return b.exec.run(ctx, func(tx *sql.Tx) error {
 		in := b.execIn(tx)
@@ -183,11 +187,21 @@ func (b *BoardStore) Complete(ctx context.Context, id taskboard.TaskID, token st
 		if !r.held(now) {
 			return errors.Wrap(taskboard.ErrLeaseLost, "sqliteadapter: 租约已过期，资格终止", "task", string(id))
 		}
-		_, err = tx.ExecContext(ctx,
-			`UPDATE gak_board_task SET state = ?, owner = NULL, token = NULL, until = NULL, seq = seq + 1 WHERE id = ?`,
-			string(taskboard.StateDone), string(id))
+		// 写回是**条件写**：带 token + state 谓词（同文件 Release 路径的
+		// releaseOrComplete 同款），保证落的一定是**判定时那一份**行——
+		// 判定与写回之间那行若被换了令牌或状态，这里写不进去。
+		res, err := tx.ExecContext(ctx,
+			`UPDATE gak_board_task
+			    SET state = ?, owner = NULL, token = NULL, until = NULL, seq = seq + 1
+			  WHERE id = ? AND token = ? AND state = ?`,
+			string(taskboard.StateDone), string(id), token, string(taskboard.StateClaimed))
 		if err != nil {
 			return errors.Wrap(err, "sqliteadapter: 完成写回失败", "task", string(id))
+		}
+		// 写回没落到那一行 ⇒ 判 ErrLeaseLost（不静默成功）——与 pgstore
+		// 同一判据（那边靠行锁，这边靠条件写 + 命中行数）。
+		if n, _ := res.RowsAffected(); n != 1 {
+			return errors.Wrap(taskboard.ErrLeaseLost, "sqliteadapter: 完成写回未命中", "task", string(id))
 		}
 		return nil
 	})
