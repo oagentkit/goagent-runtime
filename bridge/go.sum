@@ -89,10 +89,6 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/nikolalohinski/gonja v1.5.3 h1:GsA+EEaZDZPGJ8JtpeGN78jidhOlxeJROpqMT9fTj9c=
 github.com/nikolalohinski/gonja v1.5.3/go.mod h1:RmjwxNiXAEqcq1HeK5SSMmqFJvKOfTfXhkJv6YBtPa4=
-github.com/oagentkit/goagent-kernel v0.77.0 h1:G1iBDlNtIHbyWCithr52wZLQDsSYF+9EeEzFWaUm+fo=
-github.com/oagentkit/goagent-kernel v0.77.0/go.mod h1:TAG2lILmnnIs+hChmyZALH/Mg5PmXmyO+fpLJVOTgCs=
-github.com/oagentkit/goagent-runtime v0.7.0 h1:uIytyVKzREw2nE8+FV0YGxOzWqjyCD371y622i9K8dM=
-github.com/oagentkit/goagent-runtime v0.7.0/go.mod h1:HqrGsrKmo7ZPiKjGP8t+Qsm+4vuNYIeju554ANvJJQw=
 github.com/oagentkit/llm v0.27.0 h1:cGhAFo03/O9IRIuhT5rCvrLZzSCeQxpWySTdAEiIW+g=
 github.com/oagentkit/llm v0.27.0/go.mod h1:UoKlVGV0ZvsQq0YKdM+roJ94NrR9YEglzvXqiyA3ALs=
 github.com/oagentkit/textx v0.12.0 h1:ZYHicFv6zwE1X3K1jzvXPWxx763qpZaFvKTaRrzndug=
@@ -101,8 +97,8 @@ github.com/oekit/concurrency v0.40.0 h1:gFwginpsVXdY4R/hzwicyBa2u1WHmCN1h5Bw6ztl
 github.com/oekit/concurrency v0.40.0/go.mod h1:nnPMxDuUq8H9ZrqhsRpGY2n1FMAL0Jio2MZRPKlPeJo=
 github.com/oekit/logx v0.12.1 h1:7vYBKiImDcCDqEXwl8BrQSp29MvFSBUOWFTPm33fw8s=
 github.com/oekit/logx v0.12.1/go.mod h1:aIxiaegg9jzyvXhGXNcjq7ljAdVC2ERUCHqGN+thui0=
-github.com/oekit/pkg v0.61.4 h1:QwJPfIoqZWpfaF13EsgVm0CXMGOvyoX4fbQuy5JDQsU=
-github.com/oekit/pkg v0.61.4/go.mod h1:Cr6sJpBX2a0gAIgLa32+NY69h/UZtuN6L1ZdXtP9upo=
+github.com/oekit/pkg v0.61.5 h1:gkHqNb0kSZOEu6CC1cs7iYLFv6kzWWDvNLz/jaI501o=
+github.com/oekit/pkg v0.61.5/go.mod h1:Cr6sJpBX2a0gAIgLa32+NY69h/UZtuN6L1ZdXtP9upo=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.8.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.5.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
@@ -145,6 +141,10 @@ github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJ
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
 github.com/yargevad/filepathx v1.0.0 h1:SYcT+N3tYGi+NvazubCNlvgIPbzAk7i7y2dwg3I5FYc=
 github.com/yargevad/filepathx v1.0.0/go.mod h1:BprfX/gpYNJHJfc35GjRRpVcwWXS89gGulUIU5tK3tA=
+github.com/yi-nology/goagent-kernel v0.80.0 h1:6AxWuZvUeunlYqOvzg4+SQaA/iAGO2po74yE8gYEh+A=
+github.com/yi-nology/goagent-kernel v0.80.0/go.mod h1:B8yCjerGneYWnrnGLe1xJ5eWMT/vKPUTtUNZKcd8XRA=
+github.com/yi-nology/goagent-runtime v0.8.0 h1:14XTIfFpl9oF4JpQhMnTUotWK/j+bY23zikFTq7jWxM=
+github.com/yi-nology/goagent-runtime v0.8.0/go.mod h1:C67Yr1F0Sj4fLHaNIpBNOCK1dia2vAEzOV359QLcdx4=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=

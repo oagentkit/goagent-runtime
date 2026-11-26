@@ -11,8 +11,8 @@ go 1.27.4
 require (
 	github.com/cloudwego/eino v0.9.23
 	github.com/eino-contrib/jsonschema v1.0.3
-	github.com/yi-nology/goagent-runtime v0.7.0
 	github.com/oagentkit/llm v0.27.0
+	github.com/yi-nology/goagent-runtime v0.8.0
 )
 
 require (
@@ -38,11 +38,10 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
-	github.com/yi-nology/goagent-kernel v0.77.0 // indirect
 	github.com/oagentkit/textx v0.12.0 // indirect
 	github.com/oekit/concurrency v0.40.0 // indirect
 	github.com/oekit/logx v0.12.1 // indirect
-	github.com/oekit/pkg v0.61.4 // indirect
+	github.com/oekit/pkg v0.61.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
@@ -50,6 +49,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yi-nology/goagent-kernel v0.80.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
