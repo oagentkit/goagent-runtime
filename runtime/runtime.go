@@ -25,12 +25,14 @@ package runtime
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
 	"github.com/oagentkit/agent/roundguard"
+	"github.com/yi-nology/goagent-kernel/checkpoint"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/chat"
@@ -70,16 +72,39 @@ type Runtime struct {
 	closeFn   func() error
 	loopBus   *eventbus.Bus
 	publisher *eventbus.DurablePublisher
+	// store 快照读面（Session.Status 的投影源）。装配期必非 nil。
+	store checkpoint.StoreCAS
+	// closed Close 已收尾标志（幂等 Close + 事后 fail-fast 的判据）。
+	closed atomic.Bool
 }
 
 // Run 执行（或续跑）一个会话。sessionID 是恢复锚点：同一 ID 的多次 Run
 // 共享历史；进程重启后用同一 ID 再 Run 即从上次快照恢复。
+//
+// 兼容入口（薄委托到 Session）：新代码建议直接 NewSession 拿会话对象，
+// 会话身份与 Run 入口在一处（issue #38 对象模型）。
 func (r *Runtime) Run(ctx context.Context, sessionID, user string) (*agentloop.Result, error) {
-	return r.loop.Run(ctx, sessionID, user)
+	s, err := r.NewSession(ctx, SessionOptions{ID: sessionID})
+	if err != nil {
+		return nil, err
+	}
+	return s.Run(ctx, user)
 }
 
-// Close 收尾：停观测转发、关存储。
+// ensureOpen 关闭后 fail-fast：存储已收尾，继续执行只会炸出含糊的驱动层
+// 错误（sql: database is closed），不如在入口说清「runtime 已关闭」。
+func (r *Runtime) ensureOpen() error {
+	if r.closed.Load() {
+		return errors.New("runtime 已关闭（Close 之后不接受新执行与读查询）")
+	}
+	return nil
+}
+
+// Close 收尾：停观测转发、关存储。幂等——重复 Close 不重复释放，返回 nil。
 func (r *Runtime) Close() error {
+	if !r.closed.CompareAndSwap(false, true) {
+		return nil
+	}
 	r.stop()
 	if r.publisher != nil {
 		// DurablePublisher 无 Close 语义：订阅随 ctx 收尾，这里只断引用。
@@ -168,7 +193,7 @@ func assemble(cfg Config, opts []Option, prep func(*assembly) error, closeFn fun
 	}
 
 	bus := eventbus.New()
-	rt := &Runtime{stop: func() {}, closeFn: closeFn, loopBus: bus}
+	rt := &Runtime{stop: func() {}, closeFn: closeFn, loopBus: bus, store: a.storage.Checkpoints()}
 
 	// 事件发射三分派：Provider 支持联合提交（两脸同库，如 SQLite）⇒ Joint
 	// 模式——事件随快照单事务落库（issue #2 主体：孤儿事件/终态事件丢失的
