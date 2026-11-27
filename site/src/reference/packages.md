@@ -24,7 +24,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | `bridge/einotool` | 1 | 75 | `github.com/cloudwego/eino/components/tool` | 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜，宿主按业务补） | README 包表 |
 | `bridge/llmchat` | 1 | 217 | `github.com/cloudwego/eino/components/model`、`github.com/cloudwego/eino/schema`、`github.com/eino-contrib/jsonschema`、`github.com/oagentkit/llm` | 家族钦定适配器：`oagentkit/llm`（eino 栈）→ `chat.Model`（**嵌套模块**——LLM SDK 边只在 bridge 内，主 module 零 LLM SDK import 的声明面不变） | README 包表 |
 | `chat` | 2 | 216 | 无 | 供应商中立的模型窄接口与消息类型 | README 包表 |
-| `cluster` | 2 | 610 | `github.com/jackc/pgx/v5`、`github.com/oagentkit/agent`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） | README 包表 |
+| `cluster` | 2 | 700 | `github.com/jackc/pgx/v5`、`github.com/oagentkit/agent`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） | README 包表 |
 | `containerbackend` | 10 | 2112 | `github.com/oagentkit/guardx`、`github.com/oekit/concurrency`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** | README 包表 |
 | `observe` | 1 | 33 | `github.com/oekit/concurrency`、`github.com/yi-nology/goagent-kernel` | eventbus → 宿主回调 | README 包表 |
 | `pgstore` | 21 | 3877 | `github.com/jackc/pgx/v5`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） | README 包表 |

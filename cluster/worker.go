@@ -30,7 +30,7 @@ type executor struct {
 // worker 池 = 本副本的执行能力；**副本之间不共享内存**——协调全靠 PG
 // 里的任务板（认领 + 租约 + 代次）与事件面。
 func (c *Cluster) Start(ctx context.Context) error {
-	if c.closed {
+	if c.closed.Load() {
 		return errors.New("cluster: 已关闭的实例不能启动")
 	}
 	if len(c.workers) > 0 {
@@ -39,7 +39,7 @@ func (c *Cluster) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
-	pipe, err := pipeline.New(c.store.Effects(), sideEffectTTL, c.cfg.Tools)
+	pipe, err := pipeline.New(c.store.Effects(), c.cfg.SideEffectTTL, c.cfg.Tools)
 	if err != nil {
 		cancel()
 		return errors.Wrap(err, "cluster: 装配工具管线失败")
@@ -66,8 +66,10 @@ func (c *Cluster) Start(ctx context.Context) error {
 		w := &executor{id: string(c.agentID) + "/w" + itoa(i), loop: loop}
 		c.workers = append(c.workers, w)
 		c.wg.Add(1)
+		c.workerWg.Add(1)
 		async.GoSafe(func() {
 			defer c.wg.Done()
+			defer c.workerWg.Done()
 			c.runWorker(runCtx, w)
 		})
 	}
@@ -88,10 +90,19 @@ func (c *Cluster) Start(ctx context.Context) error {
 }
 
 // runWorker 一个 worker 的执行循环：领任务 → 跑 → 回传结果 → 收场。
+//
+// 排空（CloseGraceful）判据在**认领前**与**认领后**各查一次：排空已开始
+// ⇒ 不领新活；认领与排空竞争赢下来的那一单立刻归还（不当新活干）——
+// 「停止接新任务」的窗口收到一次 List+Claim 往返内。
 func (c *Cluster) runWorker(ctx context.Context, w *executor) {
 	for {
 		if ctx.Err() != nil {
 			return
+		}
+		select {
+		case <-c.drainCh:
+			return
+		default:
 		}
 		task, ok := c.claimNext(ctx, w)
 		if !ok {
@@ -99,6 +110,14 @@ func (c *Cluster) runWorker(ctx context.Context, w *executor) {
 				return
 			}
 			continue
+		}
+		// 认领与排空竞争：排空已开始 ⇒ 归还刚领的这单（认领令牌在手；
+		// 归还失败——已被接管等——无所谓，反正是不要这单了）。
+		select {
+		case <-c.drainCh:
+			_ = c.board.Release(ctx, task.ID, task.Lease.Token)
+			return
+		default:
 		}
 		c.execute(ctx, w, task)
 	}
