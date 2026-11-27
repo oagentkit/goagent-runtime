@@ -33,7 +33,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | `sqliteadapter` | 21 | 4196 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel`、`modernc.org/sqlite` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） | README 包表 |
 | `storage` | 3 | 526 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储判据面（Provider 契约 + 内存实现；**零驱动边**——纯判据包不带数据库驱动，见 #10） | README 包表 |
 | `storage/sqlitestore` | 1 | 55 | `github.com/yi-nology/goagent-kernel` | standalone 形态的 SQLite Provider 绑定（**驱动边只在这一包**：modernc 驱动不进 `storage` 纯判据包） | README 包表 |
-| `trace` | 1 | 391 | `github.com/yi-nology/goagent-kernel` | Trace 读模型：事件流 → Session/Run/Turn/ToolCall 层级投影 + 运营八问查询（#42） | README 包表 |
+| `trace` | 1 | 394 | `github.com/yi-nology/goagent-kernel` | Trace 读模型：事件流 → Session/Run/Turn/ToolCall 层级投影 + 运营八问查询（#42） | README 包表 |
 
 ## README 包表 ⇄ 磁盘目录（对账）
 

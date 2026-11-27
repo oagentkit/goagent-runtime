@@ -144,7 +144,7 @@ res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 
 ## 运行时可观测（Trace）
 
-事件是真相，`trace` 包只做投影（不落库、不改事件面）：`trace.NewCollector()` 挂到任意 Observer 注入面（`runtime.Config.Observer` / `SessionOptions.Observer` / `cluster.Config.Observer`），得到 Session → Run → Turn → ToolCall 层级，并回答运营八问——多少次 Run、多少 Turn、最慢工具调用、哪次模型调用失败（轮次+原因）、哪个 Worker 接管（走 `cluster.Board()`，任务板判据面）、为什么暂停、为什么 failed、Token 聚合。`run_id` 由 agentloop 每次执行铸造并注进每个事件 payload（`Result.RunID` 同源可对账）；计量走 `chat.ChatResponse.Usage` 随轮事件出面。包文档有八问 → 查询的逐条映射与用例（`trace/trace_test.go`）。
+事件是真相，`trace` 包只做投影（不落库、不改事件面）：`trace.NewCollector()` 挂到任意 Observer 注入面（`runtime.Config.Observer` / `SessionOptions.Observer` / `cluster.Config.Observer`），得到 Session → Run → Turn → ToolCall 层级，并回答运营八问——多少次 Run、多少 Turn、最慢工具调用、哪次模型调用失败（轮次+原因）、哪个 Worker 接管（走 `cluster.Board()`，任务板判据面）、为什么暂停、为什么 failed、Token 聚合。`run_id` 由 agentloop 每次执行铸造并注进每个事件 payload（`Result.RunID` 同源可对账）；计量走 `chat.ChatResponse.Usage` 随轮事件出面。包文档有八问 → 查询的逐条映射与用例（`trace/trace_test.go`）。事件命名法与词表单源的裁决（snake_case 为法 / `agent.*` 冻结 / run 身份走载荷键 / worker 身份留任务板）见 [ADR-0011](docs/adr/ADR-0011-事件命名法与-trace-身份面裁决.md)。
 
 ## 模型与工具的接缝（钦定适配器）
 

@@ -41,6 +41,9 @@
 // Trace 按它切分 Run。挂起（awaiting）与续跑（Approve）是两次执行 = 两个
 // Run 记录（同一会话下相邻，宿主可按 PendingCallID 关联）。Handoff 节
 // 预留在层级里（多 agent 移交事件尚无生产方，出现后按 run_id 同法归位）。
+//
+// 事件命名法与词表单源的裁决（snake_case 为法 / `agent.*` 冻结不扩张 /
+// run 身份走载荷键不新造事件族 / worker 身份留任务板）见 ADR-0011。
 package trace
 
 import (
