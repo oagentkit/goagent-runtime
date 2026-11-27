@@ -56,13 +56,14 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oekit/pkg/errors"
 
-	"github.com/yi-nology/goagent-kernel/eventbus"
 	"github.com/oagentkit/agent/roundguard"
+	"github.com/yi-nology/goagent-kernel/eventbus"
 	"github.com/yi-nology/goagent-kernel/taskboard"
 
 	"github.com/yi-nology/goagent-runtime/agentloop"
@@ -89,10 +90,14 @@ const (
 	DefaultWaitTimeout = 2 * time.Minute
 	// DefaultSchema 默认 schema 名（PG 的 public）。
 	DefaultSchema = "public"
-	// sideEffectTTL 工具副作用闸的租约有效期（与 runtime 模板同口径：30s）。
-	// 它与**任务认领租约**是两回事：前者管「同一副作用至多施加一次」，
+	// DefaultSideEffectTTL 工具副作用闸的租约有效期（与 runtime 模板同口径：
+	// 30s）。它与**任务认领租约**是两回事：前者管「同一副作用至多施加一次」，
 	// 后者管「同一任务同一时刻只有一个副本在跑」。
-	sideEffectTTL = 30 * time.Second
+	//
+	// 调小它 = 执行被取消后被扣住的闸更快回到可认领（接管延迟下限）；
+	// 调大它 = 给长工具施加段更宽的持有窗。取消路径的闸回收缺陷（清理
+	// ctx 已取消 ⇒ Abandon 静默失败 ⇒ 扣到 TTL）见 goagent-kernel 侧议题。
+	DefaultSideEffectTTL = 30 * time.Second
 )
 
 // Config 集群模板装配配置（宿主注入面 + 集群口径）。
@@ -121,6 +126,9 @@ type Config struct {
 	PollInterval time.Duration
 	// WaitTimeout Wait 的默认超时；零值 = DefaultWaitTimeout。
 	WaitTimeout time.Duration
+	// SideEffectTTL 工具副作用闸的租约有效期；零值 = DefaultSideEffectTTL。
+	// 与任务认领租约（LeaseTTL）是两回事，见 DefaultSideEffectTTL 注释。
+	SideEffectTTL time.Duration
 	// Schema PG schema 名；零值 = DefaultSchema。
 	Schema string
 }
@@ -138,8 +146,17 @@ type Cluster struct {
 	workers []*executor
 	stop    func()
 	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	closed  bool
+	// wg 全部后台 goroutine（worker + 事件转发器 + 排空等待）——Close 的
+	// 收尾闸。
+	wg sync.WaitGroup
+	// workerWg 只计 worker 执行 goroutine——CloseGraceful 的排空闸
+	// （转发器不参与排空：它在收尾时随 ctx 退出）。
+	workerWg sync.WaitGroup
+	// drainCh 排空信号：CloseGraceful 关闭它 ⇒ worker 不再认领新任务，
+	// 在途执行自然收场。New 里创建，只关一次（closed CAS 保证）。
+	drainCh chan struct{}
+	// closed 已收尾标志（Close / CloseGraceful 幂等与事后拒绝的判据）。
+	closed atomic.Bool
 
 	// mu 保护 baselines（等待起点登记表）。
 	mu sync.Mutex
@@ -193,6 +210,7 @@ func New(ctx context.Context, cfg Config, dsn string) (*Cluster, error) {
 		bus:       eventbus.New(),
 		agentID:   taskboard.AgentID("cluster-" + randomID()),
 		baselines: map[string]uint64{},
+		drainCh:   make(chan struct{}),
 	}
 	return c, nil
 }
@@ -210,6 +228,9 @@ func withDefaults(cfg Config) Config {
 	}
 	if cfg.WaitTimeout <= 0 {
 		cfg.WaitTimeout = DefaultWaitTimeout
+	}
+	if cfg.SideEffectTTL <= 0 {
+		cfg.SideEffectTTL = DefaultSideEffectTTL
 	}
 	if cfg.Schema == "" {
 		cfg.Schema = DefaultSchema
@@ -377,12 +398,17 @@ func decodeResult(payload map[string]any) (*agentloop.Result, error) {
 	}, nil
 }
 
-// Close 停 worker 池、关连接池。
+// Close 立即收尾：**取消在途执行**（封口）→ 等 goroutine 退出 → 关连接池。
+//
+// 在途任务的处置：执行被 ctx 封口后归还失败（ctx 已取消）⇒ 任务留在
+// claimed 状态，租约到期后由别的副本接管重跑（幂等闸保证副作用不重施）。
+// 幂等——重复 Close（含与 CloseGraceful 混用）返回 nil，只收尾一次。
+// 要「在途自然收场再退出」用 CloseGraceful。
 func (c *Cluster) Close() error {
-	if c.closed {
+	if !c.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	c.closed = true
+	// 立即语义：封口在途（cancel 同时停 worker 与事件转发器）。
 	if c.stop != nil {
 		c.stop()
 	}
@@ -394,4 +420,50 @@ func (c *Cluster) Close() error {
 		c.pool.Close()
 	}
 	return nil
+}
+
+// CloseGraceful 优雅收尾：**停止认领新任务，在途执行自然收场**（不封口），
+// 全部 worker 退出后关连接池。
+//
+//   - 排空完成 ⇒ 返回 nil；
+//   - ctx 到期仍未收场 ⇒ 回落 Close 的取消语义（在途封口、任务留待接管），
+//     并返回 ctx 的错误——「没排干净」必须让调用方知道，不静默降级成成功；
+//   - 幂等：已收尾（含 Close 先手）再调返回 nil。
+//
+// 收尾细节：worker 全部退出后才关池（在途的 Finish 要用池）；本地 Observer
+// 的事件镜像在收尾瞬间可能漏最后几条——真相面在 PG 事件面，本地镜像只是
+// 观测旁路。
+func (c *Cluster) CloseGraceful(ctx context.Context) error {
+	if !c.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	// 排空信号：worker 不再领新活，在途的 execute 自然收场后退出循环。
+	close(c.drainCh)
+	drained := make(chan struct{})
+	go func() {
+		c.workerWg.Wait()
+		close(drained)
+	}()
+	var drainErr error
+	select {
+	case <-drained:
+	case <-ctx.Done():
+		// 超时回落取消语义：在途封口（与 Close 同路径），任务留待接管。
+		drainErr = errors.Wrap(ctx.Err(), "cluster: 优雅收尾超时，已回落取消语义（在途封口，任务待接管）")
+		if c.cancel != nil {
+			c.cancel()
+		}
+		<-drained
+	}
+	if c.stop != nil {
+		c.stop()
+	}
+	if c.cancel != nil {
+		c.cancel()
+	}
+	c.wg.Wait()
+	if c.pool != nil {
+		c.pool.Close()
+	}
+	return drainErr
 }
