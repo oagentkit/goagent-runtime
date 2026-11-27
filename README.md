@@ -122,7 +122,8 @@ res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 | `pgstore` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） |
 | `runtime` | 模板装配（embedded / standalone） |
 | `cluster` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） |
-| `observe` | eventbus → 宿主回调 |
+| `observe` | eventbus → 宿主回调（薄转发，不 Interpret 语义） |
+| `trace` | Trace 读模型：事件流 → Session/Run/Turn/ToolCall 层级投影 + 运营八问查询（#42） |
 | `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** |
 | `bridge/llmchat` | 家族钦定适配器：`oagentkit/llm`（eino 栈）→ `chat.Model`（**嵌套模块**——LLM SDK 边只在 bridge 内，主 module 零 LLM SDK import 的声明面不变） |
 | `bridge/einotool` | 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜，宿主按业务补） |
@@ -140,6 +141,10 @@ res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 ## 执行模型（Loop 与 Pipeline 分立）
 
 两种执行模型**分立**，边界判据是**谁决定下一步**：Loop 的下一步由模型定（自主决策），Pipeline（若立项）的下一步由依赖图定（确定性流程）——不压成一个执行模型。共享的是 Run / Step / Checkpoint / Event / Cancellation 语义与读面，不是控制流抽象；判据仍全部来自 kernel。家族组合规则：定步流程力学组合 `oekit/workflow`、Multi-Agent 拓扑守卫组合 `oagentkit/agent/dispatch`，本仓不自造流程引擎与拓扑守卫；工具副作用换执行模型不换闸。Pipeline 执行器条件立项（有消费方才建）。推导与拒收面见 [ADR-0010](docs/adr/ADR-0010-执行接口两模型分立共享语义不成模型.md)。
+
+## 运行时可观测（Trace）
+
+事件是真相，`trace` 包只做投影（不落库、不改事件面）：`trace.NewCollector()` 挂到任意 Observer 注入面（`runtime.Config.Observer` / `SessionOptions.Observer` / `cluster.Config.Observer`），得到 Session → Run → Turn → ToolCall 层级，并回答运营八问——多少次 Run、多少 Turn、最慢工具调用、哪次模型调用失败（轮次+原因）、哪个 Worker 接管（走 `cluster.Board()`，任务板判据面）、为什么暂停、为什么 failed、Token 聚合。`run_id` 由 agentloop 每次执行铸造并注进每个事件 payload（`Result.RunID` 同源可对账）；计量走 `chat.ChatResponse.Usage` 随轮事件出面。包文档有八问 → 查询的逐条映射与用例（`trace/trace_test.go`）。
 
 ## 模型与工具的接缝（钦定适配器）
 

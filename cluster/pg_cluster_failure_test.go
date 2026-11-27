@@ -652,3 +652,53 @@ func TestClusterCloseGracefulTimeoutFallsBackToCancel(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 }
+
+// TestClusterBoardExposesWorkerIdentity 运营问 5（issue #42）：哪个
+// Worker 接管了任务——身份在任务板（Owner + 接管代次 Fence），走
+// Board().List 查询（判据面），不进事件投影（trace 包文档指路于此）。
+func TestClusterBoardExposesWorkerIdentity(t *testing.T) {
+	dsn := requireDSN(t)
+	schema := testSchema(t, dsn)
+	ctx := context.Background()
+
+	model := &fakeModel{errAt: -1, toolName: "计数器", final: "done", stableID: true}
+	c, err := cluster.New(ctx, cluster.Config{
+		Model:        model,
+		Tools:        []pipeline.Tool{countingTool("计数器", &atomic.Int64{})},
+		Workers:      1,
+		LeaseTTL:     time.Second,
+		PollInterval: 50 * time.Millisecond,
+		WaitTimeout:  10 * time.Second,
+		Schema:       schema,
+	}, dsn)
+	if err != nil {
+		t.Fatalf("装配 cluster 失败: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	if err := c.Submit(ctx, "sess-owner", "数一下"); err != nil {
+		t.Fatalf("投递失败: %v", err)
+	}
+	// 认领方 = worker 身份（Owner），接管代次 = Fence——两者都在任务板上。
+	if _, err := c.Board().Claim(ctx, "sess-owner", "copy-a/w0",
+		taskboard.ClaimRequest{TTL: time.Minute}); err != nil {
+		t.Fatalf("认领失败: %v", err)
+	}
+	tasks, err := c.Board().List(ctx)
+	if err != nil {
+		t.Fatalf("读任务板失败: %v", err)
+	}
+	for _, tk := range tasks {
+		if tk.ID != "sess-owner" {
+			continue
+		}
+		if string(tk.Owner) != "copy-a/w0" {
+			t.Fatalf("任务板应记录执行者身份，got owner=%q", tk.Owner)
+		}
+		if tk.Lease.Fence == 0 || tk.Lease.Token == "" {
+			t.Fatalf("任务板应携带接管代次与令牌，got fence=%d token=%q", tk.Lease.Fence, tk.Lease.Token)
+		}
+		return
+	}
+	t.Fatal("任务板上找不到已认领的任务")
+}

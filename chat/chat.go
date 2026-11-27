@@ -94,6 +94,13 @@ type ChatResponse struct {
 	Content string
 	// ToolCalls 非空 = 模型请求执行工具，loop 将进入工具回合。
 	ToolCalls []ToolCall
+	// Usage 可选计量（模型/适配层上报时填；nil = 未上报）。
+	//
+	// 非流式契约的计量面：流式走 Delta.Usage（DeltaAggregator 归并），
+	// 非流式适配层拿到供应商的 usage 字段时填这里——loop 会把它带进
+	// round 事件，Trace 聚合出 Token/成本（issue #42）。不填不报错，
+	// 只是聚合面少一份数据。
+	Usage *Usage
 }
 
 // Model 供应商中立的模型调用接口——runtime 唯一需要的模型面。

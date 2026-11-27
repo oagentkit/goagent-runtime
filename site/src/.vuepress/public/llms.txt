@@ -41,13 +41,13 @@
 
 ## 事实快照
 - 模块: `github.com/yi-nology/goagent-runtime` · Go `1.27.4` · MIT
-- 能力包 14 个（生产代码 14256 行 / 71 个文件）
+- 能力包 15 个（生产代码 14725 行 / 72 个文件）
 - kernel 地板版本: `v0.80.0`；判据全部来自 kernel 契约面
 - 第一方依赖 7 个（直接）/ 15 个（间接）
 - 模板: `NewEmbedded`（内存）/ `NewStandalone`（SQLite 单文件）/ `cluster`（PG + worker 池，多副本）
 - 已发布版本 16 个，最新 `v0.8.0`；决策记录 10 篇
 
-## 包一览（14）
+## 包一览（15）
 - `adjudicate` — 副作用未知态的周期裁决（证据回查 → 三态判定 → 落裁决
 - `agentloop` — 可恢复回合循环（预算守卫 + 检查点 + 事件）
 - `bridge/einotool` — 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜…
@@ -55,10 +55,11 @@
 - `chat` — 供应商中立的模型窄接口与消息类型
 - `cluster` — 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面）
 - `containerbackend` — 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它**
-- `observe` — eventbus → 宿主回调
+- `observe` — eventbus → 宿主回调（薄转发，不 Interpret 语义）
 - `pgstore` — PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入）
 - `pipeline` — 工具注册与副作用施加（幂等键/资源/重试安全性映射）
 - `runtime` — 模板装配（embedded / standalone）
 - `sqliteadapter` — SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源）
 - `storage` — 存储判据面（Provider 契约 + 内存实现
 - `storage/sqlitestore` — standalone 形态的 SQLite Provider 绑定（**驱动边只在这一包**：modernc 驱动不进 …
+- `trace` — Trace 读模型：事件流 → Session/Run/Turn/ToolCall 层级投影 + 运营八问查询（#42）
