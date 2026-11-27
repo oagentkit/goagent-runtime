@@ -127,6 +127,10 @@ res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
 - cluster 模板的判据同样来自 kernel（`taskboard` 抢占/租约/接管代次、`sideeffect` 幂等闸、`roundguard` 预算、`eventbus` 事件面）——本仓只做接线，证据在真 PG 集成用例里；
 - `roundguard` 自 v0.77.0 起上抛 `github.com/oagentkit/agent/roundguard`（归属评测 2026-11-26：单 agent 循环判据，与编排无关）。
 
+## 执行模型（Loop 与 Pipeline 分立）
+
+两种执行模型**分立**，边界判据是**谁决定下一步**：Loop 的下一步由模型定（自主决策），Pipeline（若立项）的下一步由依赖图定（确定性流程）——不压成一个执行模型。共享的是 Run / Step / Checkpoint / Event / Cancellation 语义与读面，不是控制流抽象；判据仍全部来自 kernel。家族组合规则：定步流程力学组合 `oekit/workflow`、Multi-Agent 拓扑守卫组合 `oagentkit/agent/dispatch`，本仓不自造流程引擎与拓扑守卫；工具副作用换执行模型不换闸。Pipeline 执行器条件立项（有消费方才建）。推导与拒收面见 [ADR-0010](docs/adr/ADR-0010-执行接口两模型分立共享语义不成模型.md)。
+
 ## 模型与工具的接缝（钦定适配器）
 
 宿主有两条接入路径：**直接实现** `chat.Model` / `pipeline.Tool`（供应商中立，本仓不 import 任何 SDK——ADR-0001/0003），或**经 bridge 嵌套模块**复用 eino 生态（llm 降级链/预算、既有 eino 工具一族接入）。bridge 在独立 go.mod 里，不用它的宿主依赖图里没有 llm/eino。

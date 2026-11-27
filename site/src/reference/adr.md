@@ -19,5 +19,6 @@ title: 决策记录（ADR）
 | [ADR-0007](/goagent-runtime/adr/ADR-0007-驱动绑定归绑定包.html) | 驱动绑定归绑定包 | 驱动绑定归绑定包——判据面（`storage`）零驱动边，绑定面（`storage/sqlitestore`）才带驱动，宿主按面 import。 | 已采纳（Accepted） |
 | [ADR-0008](/goagent-runtime/adr/ADR-0008-事件与快照同生共死.html) | 事件与快照同生共死 | 事件与快照同生共死——两脸同库时单事务联合提交，孤儿事件与终态丢失两个窗口结构闭合。 | 已采纳（Accepted） |
 | [ADR-0009](/goagent-runtime/adr/ADR-0009-流式接缝走-push-回调加框架归并器.html) | 流式接缝走 push 回调 + 框架归并器 | 流式接缝走 push 回调 + 框架归并器——宿主只产片段，归并规则归框架一份，增量是观测面不进状态面。 | 已采纳（Accepted） |
+| [ADR-0010](/goagent-runtime/adr/ADR-0010-执行接口两模型分立共享语义不成模型.html) | 执行接口两模型分立，共享语义不成模型 | 执行接口两模型分立——Loop 与 Pipeline 不压成一个执行模型，共享的是 Run/Step/Checkpoint/Event/Cancellation 语义与读面；流程力学组合 `oekit/workflow`、拓扑守卫组合 `agent/dispatch`，本仓不自造引擎。 | 已采纳（Accepted） |
 
 > 仓内索引：https://github.com/yi-nology/goagent-runtime/blob/main/docs/adr/README.md（新增 ADR 的流程写在那里）。
