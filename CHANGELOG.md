@@ -2,6 +2,138 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.9.0] — 2026-11-28
+
+### 新增(trace)：统一 Trace 可观测——run_id 贯通 + Session/Run/Turn 读模型 + 运营八问（#42 W5）
+
+* feat(trace): 统一 Trace 可观测——run_id 进事件面 + Session/Run/Turn/ToolCall 读模型 + 运营八问（#42 W5）
+run_id 贯通（agentloop）：
+- 每次 Run/Approve 铸造执行身份，emit/emitDelta 注进每个事件 payload；
+  Result.RunID 同源可对账；cluster 结果载荷带 run_id（跨副本回传）
+- 模型调用失败 ⇒ session_status{failed, error} + ctx 存活时落终态快照
+  （Joint 单事务；ctx 已取消 = 留待恢复不落终态）——「哪次模型调用失败/
+  为什么 failed」从此可回答
+- 挂起事件补 pending_call_id 且改到提交前（原顺序在 Joint 形态下事件
+  挂在提交后 = 永远等不到下一次提交，必丢）
+- 审批闸失败：只发事件不提交——中途失败遵循「最后干净快照为恢复点」
+  原则（提交会写下被 verifyHistory 判篡改的历史，会话被写死）
+- 计量面：chat.ChatResponse.Usage（新增，nil=未上报不猜）随 round
+  事件出面
+trace 包（新，读模型）：
+- Collector 挂任意 Observer 注入面，投影 Session→Run→Turn→ToolCall
+  层级（事件是真相，不落库不改事件面）；载荷双形态判值（进程内原生
+  类型 / PG·SQLite 往返后 JSON map+float64）
+- 八问查询：RunCount / TurnCount / SlowestToolCall（call_id 配对计时）/
+  Failures（RunID+失败轮次+原因）/ PauseReason / TerminalFailure /
+  Usage 聚合；问 5（Worker 身份）指路 cluster Board() 任务板判据面
+  （cluster 用例钉 Owner+Fence）
+用例：trace 三用例端到端钉八问（含 JSON 载荷形态）+ cluster 问 5 用例；
+全量回归 + race 全绿；README 补 Trace 节与包表；站点投影重生成。
+#42 #37
+* docs(adr): ADR-0011 事件命名法与 Trace 身份面裁决（#42 修订输入验收件）
+三形态实况核对后的裁决：
+- 全栈命名法 = snake_case（kernel eventbus ~40 常量为法，不改名——
+  破坏性 rename + 消费方连坐，拒绝）；总纲点号词表作语义清单吸收
+- agentloop 6 个 agent.* 点号常量是既有事实面：冻结不再新增，新词
+  一律 snake_case；与 kernel 同义词并存期各自成文，对齐是后续独立议题
+- Run 身份走载荷键 run_id，不新造 run_started 事件族（round 序列 +
+  session_status 已表达边界；载荷键纯加法，一轮四事件判据不动）
+- Worker 身份不进事件面：Owner/Fence 在 taskboard 判据面，投影指路
+  cluster.Board().List——观测面不复制判据面
+验收件：词汇 → 统一层级视图投影表（执行层 6 词 + 载荷键 + 任务板 +
+机制层语义清单四行族）；trace 包文档与 README 可观测节指回 ADR。
+#42
+
+### 新增(runtime)：会话级配置分层 + 产品入口对齐（#41 W4）
+
+配置分层（SessionOptions 覆盖，判据=不泄漏）：
+- System / Budget / Tools 三件覆盖：nil=继承 Runtime 级，非 nil=仅本会话；
+  带覆盖的会话在 NewSession 即装配会话级 Loop（装配错误 fail-fast，不等
+  首跑），无覆盖走共享 Loop（零额外成本）
+- Observer 覆盖：附加在 Runtime 级之上、按 sessionID 过滤；detach 登记到
+  Runtime.Close 统一收尾（与 trackSessionStop 同锁，关闭竞态不漏不重）
+- 五用例钉「不泄漏」：System 覆盖只进本会话首跑 / Budget 掐点只掐本会话
+  （timed_out vs 自然终态对照）/ Tools 换面 refused 不施加而基座正常施加 /
+  Observer 过滤 + Close 幂等 / 覆盖工具面有审批需求而无闸 ⇒ NewSession
+  fail-closed
+产品入口对齐（README 最小接入 / quickstart / embedded+standalone 模板页 /
+两示例）：统一到 NewSession → session.Run 形态，rt.Run 标注为兼容入口；
+修 quickstart 的 chat.Model 签名错误（实为 Chat(ctx, ChatRequest)
+(ChatResponse, error)）；补配置分层与恢复锚点说明。两示例实跑验证
+（恢复不重放：施加次数恒 1）。
+#41 #37
+
+### 新增(cluster)：失败模式 e2e 矩阵 + CloseGraceful 排空收尾 + SideEffectTTL 旋钮（#40 W3）
+
+失败模式矩阵（cluster/pg_cluster_failure_test.go，真 PG，六用例）：
+- 租约续期：执行 > 2×TTL 的长任务，竞争认领在整个窗口恒被拒（续期
+  节拍顶住；失灵即双执行入口）
+- 双活窗口：旧持有者带过期令牌回来 Finish 被拒（ErrLeaseLost）、其
+  过期结论不得出现在事件面（只有接管方一条结果）
+- uncertain 跨副本：Safe 未声明 + 执行体报错 ⇒ res.Uncertain 经事件面
+  回传等待方（携调用 ID，不阻断终答）
+- 取消 vs 在途：Close 封口有界返回、执行体感知取消、任务不悬空（租约
+  到期可接管）、接管后成功施加恰一次
+- 优雅关闭排空：在途自然收场不被封口、收场后任务终态、重复收尾幂等
+- 排空超时回落：ctx 到期回落取消语义并如实返回错误（不静默成成功）
+CloseGraceful（新）：停止认领新任务（认领前后双检排空信号，竞争赢下
+的一单立刻归还）→ 在途自然收场 → 关池；worker 专用 WaitGroup 与转发
+器分离（转发器不参与排空）。Close/CloseGraceful 幂等（atomic CAS），
+收尾后五入口 fail-fast（Start 拒绝已关闭实例）。
+SideEffectTTL 旋钮（新）：副作用闸租约从硬编码 30s 提为 Config 字段
+（零值 = DefaultSideEffectTTL）。实弹发现：取消路径上 Safe 失败的闸
+回收（Abandon）用已取消 ctx 静默失败 ⇒ 闸被扣到 TTL、接管方首轮可能
+contended——安全不变量不破（不重复施加）但接管延迟下限 = TTL；根治
+在 kernel 侧（清理 ctx 必须 cancel-proof），另提上游单。
+README 补失败模式矩阵/收尾语义/已知边界；站点投影重生成。
+#40 #37
+
+### 新增(runtime)：会话一等对象——NewSession/Session.Run/Status/Approve + Close 幂等（#38 W1）
+
+* feat(runtime): 会话一等对象——NewSession/Session.Run/Status/Approve + Close 幂等 fail-fast（#38 W1 切片1+4）
+- Session 对象：NewSession 打开（不制造状态，历史由快照承载）、session.Run
+  与 Runtime.Run 同锚点语义、Status 投影自 checkpoint 快照（只读不解释，
+  不另造状态面）、Approve 补上挂起→恢复的模板层接缝（Loop.Approve 此前
+  未暴露，挂起后宿主无法经模板层落决策）
+- Runtime.Run/Approve 薄委托到 Session（兼容入口）；空 sessionID 装配期
+  fail-fast（匿名会话历史互相碰撞）
+- Close 幂等（重复 Close 返回 nil）+ 关闭后 NewSession/Run/Status/Approve
+  一律 fail-fast（存储已收尾，不炸含糊的驱动层错误）
+- 七用例钉判据：空 ID 拒绝 / 会话端到端 / 双入口历史共享 / 状态生命周期 /
+  挂起幂等短路+Approve 续跑副作用只施加一次 / Runtime.Approve 兼容 /
+  Close 幂等与事后 fail-fast
+判据不另写：状态词表与终态分类仍归 kernel contract；执行可变状态仍在
+agentloop runState 与快照序号闸。
+#38
+* docs(site): 生成页随 #38 重生成——runtime 包行数/文件数 + 补 v0.8.0 版本段投影
+npm run gen:reference 按仓库事实重算：session.go 落地后 runtime 包
+1→2 文件、201→329 行；releases/llms 的 v0.8.0 事实面此前过期（预写
+时生成的产物），一并追平。CI 生成页同步校验的执行体。
+#38
+
+- 构建(bridge)：地板追到 runtime v0.8.0（回迁后 yi-nology path 首版）
+
+- 文档(adr)：ADR-0010 执行接口两模型分立——Loop/Pipeline 边界定型（#39 切片1）
+
+- 边界判据=谁决定下一步：Loop 下一步由模型定（自主决策），Pipeline
+  （若立项）由依赖图定（确定性流程）——不压成一个执行模型
+- 共享的是 Run/Step/Checkpoint/Event/Cancellation 语义与读面，不是控制流
+  抽象；判据仍全归 kernel（checkpoint/eventbus/roundguard/sideeffect）
+- 家族组合规则钉死：流程力学组合 oekit/workflow、Multi-Agent 拓扑守卫
+  组合 oagentkit/agent/dispatch——本仓不自造流程引擎与拓扑守卫；换执行
+  模型不换副作用闸
+- Pipeline 执行器条件立项（有消费方才建）；反例面（不共享 Round/回合）
+  与拒收面成文，防统一压力与第二套引擎
+- README 执行模型节留摘要指回 ADR；站点投影重生成（ADR 9→10 篇）
+#39 #37
+
+- 文档(site)：生成页重生成——releases.md 补 v0.8.0 段、llms.txt 地板随 kernel v0.80.0
+
+npm run gen:reference（gen_reference_pages.mjs）按仓库事实重算：
+v0.8.0 tag 落地后 releases 与 llms 的事实面变了，预写时生成的产物已过期
+（CI 生成页同步校验红）。
+
+
 ## [v0.8.0] — 2026-11-26
 
 ### 新增(cluster)：claimNext 单次 Claim + README 裁定段（#24 方案 C①）
