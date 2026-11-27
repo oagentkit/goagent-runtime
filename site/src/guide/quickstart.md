@@ -37,20 +37,28 @@ rt, err := runtime.NewEmbedded(runtime.Config{
     }},
 })
 if err != nil { ... }
+defer rt.Close()
 
-res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
+session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "session-1"})
+if err != nil { ... }
+
+res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 // res.Status / res.Final / res.Rounds / res.ToolCalls / res.Uncertain
 ```
+
+- `session-1` 是**恢复锚点**：同一 ID 的多次 `Run` 共享历史，进程重启后同 ID 续跑即从快照恢复（详见 [中断恢复](/goagent-runtime/advanced/recovery.html)）。
+- 会话级配置覆盖：`SessionOptions{System / Budget / Tools / Observer}` 只作用于本会话，不改 Runtime 默认、不串到其他会话（nil = 继承）。
+- 老调用方零改动：`rt.Run(ctx, sessionID, user)` 仍在（薄委托到 Session）。
 
 `NewStandalone(cfg, "/path/to/x.db")` 把内存存储换成 SQLite 单文件，其余代码**一行不改**。
 
 ## 模型从哪来？
 
-`chat.Model` 是供应商中立窄接口——任何模型 SDK（OpenAI / Anthoyropic / 自研网关 / eino）包一层适配即可接入：
+`chat.Model` 是供应商中立窄接口——任何模型 SDK（OpenAI / Anthropic / 自研网关 / eino）包一层适配即可接入：
 
 ```go
 type Model interface {
-    Chat(ctx context.Context, messages []Message, tools []ToolDecl) (*Response, error)
+    Chat(ctx context.Context, req chat.ChatRequest) (chat.ChatResponse, error)
 }
 ```
 

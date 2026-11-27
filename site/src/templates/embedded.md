@@ -17,8 +17,9 @@ sequenceDiagram
     RT->>ST: 创建内存副作用闸 + 快照存取
     RT->>LP: 装配循环（Emitter → 进程内 eventbus）
     RT->>OB: Attach（可选，宿主 Sink）
-    RT-->>U: Runtime（可 Run）
-    U->>LP: Run(ctx, session, 输入)
+    RT-->>U: Runtime
+    U->>RT: NewSession(ID) → Session
+    U->>LP: session.Run(ctx, 输入)
     LP-->>U: Result
 ```
 
@@ -32,5 +33,6 @@ sequenceDiagram
 
 ```go
 rt, err := runtime.NewEmbedded(runtime.Config{Model: m, Tools: tools})
-res, err := rt.Run(ctx, "session-1", "查一下 A 仓库存")
+session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "session-1"})
+res, err := session.Run(ctx, "查一下 A 仓库存")
 ```
