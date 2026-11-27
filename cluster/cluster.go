@@ -354,6 +354,8 @@ var ErrWaitTimeout = errors.New("cluster: 等待会话结果超时")
 // 结构体经 JSON 往返会退化成 map[string]any，类型不稳；故载荷本身是
 // 一个 JSON 字符串，取回时按固定结构解码，类型稳定）。
 type resultPayload struct {
+	// RunID 执行身份（Trace Session→Run 锚点的跨副本回传，issue #42）。
+	RunID     string   `json:"run_id,omitempty"`
 	Status    string   `json:"status"`
 	Final     string   `json:"final"`
 	Rounds    int      `json:"rounds"`
@@ -367,6 +369,7 @@ func encodeResult(res *agentloop.Result) (map[string]any, error) {
 		return nil, errors.New("cluster: 结果为空（无内容可回传）")
 	}
 	raw, err := json.Marshal(resultPayload{
+		RunID:     res.RunID,
 		Status:    res.Status,
 		Final:     res.Final,
 		Rounds:    res.Rounds,
@@ -390,6 +393,7 @@ func decodeResult(payload map[string]any) (*agentloop.Result, error) {
 		return nil, errors.Wrap(err, "cluster: 结果载荷解析失败")
 	}
 	return &agentloop.Result{
+		RunID:     p.RunID,
 		Status:    p.Status,
 		Final:     p.Final,
 		Rounds:    p.Rounds,

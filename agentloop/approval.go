@@ -134,7 +134,7 @@ func (l *Loop) Approve(ctx context.Context, sessionID string, callID string, app
 		return nil, errors.Newf("callID 不匹配挂起调用: 挂起=%s 传入=%s", pending, callID)
 	}
 
-	st := newRunState(sessionID, messages, done, snap)
+	st := newRunState(sessionID, l.newRunID(), messages, done, snap)
 	res := st.res
 	if approved {
 		// 恢复**完整**调用（含参数）：获批的是带参数的具体动作，只恢复

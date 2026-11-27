@@ -34,11 +34,11 @@ import (
 
 	"github.com/oekit/pkg/errors"
 
+	"github.com/oagentkit/agent/roundguard"
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/contract"
 	"github.com/yi-nology/goagent-kernel/eventbus"
 	"github.com/yi-nology/goagent-kernel/invocation"
-	"github.com/oagentkit/agent/roundguard"
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
@@ -138,6 +138,10 @@ type Config struct {
 
 // Result 一次 Run 的结果。
 type Result struct {
+	// RunID 本次执行的身份（装配层铸造，随事件面 payload 的 run_id 出去
+	// ——Trace 层级 Session→Run 的锚点，issue #42）。未真正执行的返回
+	//（挂起态短路）为空：没有执行就没有身份。
+	RunID string
 	// Status contract 状态词表（succeeded / failed / timed_out）。
 	Status string
 	// Final 终答文本（Status=succeeded 时有值）。
@@ -183,10 +187,13 @@ type Loop struct {
 // 下一轮连同别的会话一起提交）。
 type runState struct {
 	sessionID string
-	messages  []chat.Message
-	done      []string
-	used      roundguard.Used
-	res       *Result
+	// runID 本次执行的身份（每次 Run/Approve 铸造一次；emit 把它注进每个
+	// 事件 payload——Trace 按它切分 Session→Run 层级，issue #42）。
+	runID    string
+	messages []chat.Message
+	done     []string
+	used     roundguard.Used
+	res      *Result
 	// pendings Joint 模式的事件累计面（emit 构造后不发送，随下一次快照
 	// 提交原子落库）。
 	pendings []eventbus.Event
@@ -242,7 +249,7 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 	if snap != nil && snap.Status == StatusAwaitingApproval {
 		return &Result{Status: StatusAwaitingApproval, PendingCallID: pendingCallID(messages)}, nil
 	}
-	st := newRunState(sessionID, messages, done, snap)
+	st := newRunState(sessionID, l.newRunID(), messages, done, snap)
 	// 账本模式：先按账本续跑未完成的调用，再谈下一轮。
 	//
 	// ★ 顺序是**协议要求**：历史里有未答复的工具调用时，模型协议不接受把它
@@ -260,13 +267,14 @@ func (l *Loop) Run(ctx context.Context, sessionID, user string) (*Result, error)
 }
 
 // newRunState 建一次执行的局部状态。snap 为 nil = 首次执行（序号从 0 起）。
-func newRunState(sessionID string, messages []chat.Message, done []string, snap *checkpoint.Snapshot) *runState {
+func newRunState(sessionID, runID string, messages []chat.Message, done []string, snap *checkpoint.Snapshot) *runState {
 	st := &runState{
 		sessionID: sessionID,
+		runID:     runID,
 		messages:  messages,
 		done:      done,
 		used:      roundguard.Used{Tools: map[string]int{}},
-		res:       &Result{Status: contract.StatusRunning},
+		res:       &Result{Status: contract.StatusRunning, RunID: runID},
 	}
 	if snap != nil {
 		st.seq = snap.Seq
@@ -312,6 +320,18 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 		}
 		resp, err := l.cfg.Model.Chat(ctx, req)
 		if err != nil {
+			// 失败原因进事件面（issue #42：「哪次模型调用失败」「为什么 failed」
+			// 要可回答）：发 session_status{failed, error} 并落终态快照——
+			// Joint 形态下状态事件随快照单事务落库。ctx 已取消时不提交：
+			// 取消是「留待恢复」不是终态（提交也必然失败，省一次无谓写）。
+			l.emit(ctx, st, EventSessionState, map[string]any{
+				"status": contract.StatusFailed, "error": err.Error(),
+			})
+			if ctx.Err() == nil {
+				if cerr := l.commit(ctx, st, contract.StatusFailed); cerr != nil {
+					err = errors.Append(err, errors.Wrap(cerr, "失败状态落库失败"))
+				}
+			}
 			// ctx 取消/超时上抛：快照已持久化，下次同 sessionID 再 Run 即恢复。
 			return st.res, errors.Wrap(err, "模型调用失败", "session", st.sessionID)
 		}
@@ -331,9 +351,18 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 			Content:   resp.Content,
 			ToolCalls: calls,
 		})
-		l.emit(ctx, st, EventRoundStart, map[string]any{
+		roundPayload := map[string]any{
 			"round": st.used.Rounds, "tool_calls": len(calls),
-		})
+		}
+		// 计量随轮事件出面（模型/适配层上报了才有）——Trace 聚合 Token/成本。
+		if resp.Usage != nil {
+			roundPayload["usage"] = map[string]any{
+				"prompt_tokens":     resp.Usage.PromptTokens,
+				"completion_tokens": resp.Usage.CompletionTokens,
+				"total_tokens":      resp.Usage.TotalTokens,
+			}
+		}
+		l.emit(ctx, st, EventRoundStart, roundPayload)
 
 		// 账本模式：**先落账、后提交历史**。
 		//
@@ -388,6 +417,17 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 				decision, err := l.cfg.ApprovalGate(ctx, st.sessionID, call)
 				if err != nil {
 					// fail-closed：闸失败=无法证明获准，副作用不施加。
+					//
+					// 失败原因进事件面（issue #42），但**不提交快照**：本轮
+					// assistant 请求已在历史里、答复缺失——中途失败遵循
+					// 「最后干净快照为恢复点」的崩溃窗口原则，提交只会写下
+					// 一份会被 verifyHistory 判篡改的历史（会话被写死）。
+					// Joint 形态下该事件随本次返回不落库（与其它中途失败同
+					// 口径）；宿主拿得到的是返回的错误本身。
+					l.emit(ctx, st, EventSessionState, map[string]any{
+						"status": contract.StatusFailed,
+						"error":  "审批闸失败: " + err.Error(),
+					})
 					return st.res, errors.Wrap(err, "审批闸失败", "session", st.sessionID, "tool", call.Name)
 				}
 				switch decision {
@@ -421,10 +461,16 @@ func (l *Loop) drive(ctx context.Context, st *runState) (*Result, error) {
 					// 提交 awaiting 快照后返回，宿主稍后经 Approve 落决策。
 					st.res.Status = StatusAwaitingApproval
 					st.res.PendingCallID = call.ID
+					// 事件先于提交：Joint 形态事件随快照单事务落库（挂在
+					// 提交之后 = 永远等不到下一次提交，事件必丢）。
+					// pending_call_id 进载荷：Trace 要能回答「为什么暂停」
+					//（issue #42 问 6）。
+					l.emit(ctx, st, EventSessionState, map[string]any{
+						"status": st.res.Status, "pending_call_id": call.ID,
+					})
 					if err := l.commit(ctx, st, st.res.Status); err != nil {
 						return st.res, err
 					}
-					l.emit(ctx, st, EventSessionState, map[string]any{"status": st.res.Status})
 					return st.res, nil
 				}
 			}
@@ -619,11 +665,25 @@ func (l *Loop) newID() string {
 	if l.cfg.NewID != nil {
 		return l.cfg.NewID()
 	}
+	return "call-" + l.randHex()
+}
+
+// newRunID 铸本次执行的身份（run- 前缀与工具调用 ID 区分；同一入口的
+// NewID 覆盖面同时服务两者——测试脚本化时一处定序）。
+func (l *Loop) newRunID() string {
+	if l.cfg.NewID != nil {
+		return "run-" + l.cfg.NewID()
+	}
+	return "run-" + l.randHex()
+}
+
+// randHex 12 字节随机 hex（crypto/rand，失败退进程内计数+时间戳）。
+func (l *Loop) randHex() string {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err == nil {
-		return "call-" + hex.EncodeToString(b[:])
+		return hex.EncodeToString(b[:])
 	}
-	return "call-" + time.Now().Format("20060102150405.000000000") + "-" +
+	return time.Now().Format("20060102150405.000000000") + "-" +
 		hex.EncodeToString([]byte{byte(l.fallback.Add(1))})
 }
 
@@ -646,6 +706,11 @@ func (l *Loop) emit(ctx context.Context, st *runState, typ string, payload map[s
 	if l.cfg.Emitter == nil && l.cfg.Joint == nil {
 		return
 	}
+	// run_id 贯通：每个事件带本次执行的身份（Trace 层级的锚点，issue #42）。
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["run_id"] = st.runID
 	if l.cfg.Joint != nil {
 		st.pendings = append(st.pendings, eventbus.Event{
 			SessionID: st.sessionID, Type: typ, Level: "info",
@@ -693,6 +758,10 @@ func deltaPayload(d chat.Delta) map[string]any {
 // 背压：总线广播是**非阻塞**的（订阅方缓冲满则丢弃并计数）⇒ 宿主 SSE 写慢
 // 不会反压模型流；片段因此可能丢——观测面允许丢，状态面不允许。
 func (l *Loop) emitDelta(ctx context.Context, st *runState, payload map[string]any) {
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["run_id"] = st.runID
 	if l.cfg.Joint != nil {
 		if l.cfg.Bus != nil {
 			l.cfg.Bus.Broadcast(eventbus.Event{

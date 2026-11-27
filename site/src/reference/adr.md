@@ -20,5 +20,6 @@ title: 决策记录（ADR）
 | [ADR-0008](/goagent-runtime/adr/ADR-0008-事件与快照同生共死.html) | 事件与快照同生共死 | 事件与快照同生共死——两脸同库时单事务联合提交，孤儿事件与终态丢失两个窗口结构闭合。 | 已采纳（Accepted） |
 | [ADR-0009](/goagent-runtime/adr/ADR-0009-流式接缝走-push-回调加框架归并器.html) | 流式接缝走 push 回调 + 框架归并器 | 流式接缝走 push 回调 + 框架归并器——宿主只产片段，归并规则归框架一份，增量是观测面不进状态面。 | 已采纳（Accepted） |
 | [ADR-0010](/goagent-runtime/adr/ADR-0010-执行接口两模型分立共享语义不成模型.html) | 执行接口两模型分立，共享语义不成模型 | 执行接口两模型分立——Loop 与 Pipeline 不压成一个执行模型，共享的是 Run/Step/Checkpoint/Event/Cancellation 语义与读面；流程力学组合 `oekit/workflow`、拓扑守卫组合 `agent/dispatch`，本仓不自造引擎。 | 已采纳（Accepted） |
+| [ADR-0011](/goagent-runtime/adr/ADR-0011-事件命名法与-trace-身份面裁决.html) | 事件命名法与 Trace 身份面裁决 | 事件命名法 snake_case 为法、`agent.*` 冻结不扩张、run 身份走载荷键不新造事件族、worker 身份留在任务板——trace 投影是词表的唯一合成点，不建第三份词表。 | 已采纳（Accepted） |
 
 > 仓内索引：https://github.com/yi-nology/goagent-runtime/blob/main/docs/adr/README.md（新增 ADR 的流程写在那里）。
