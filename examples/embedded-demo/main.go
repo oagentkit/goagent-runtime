@@ -84,7 +84,12 @@ func runDemo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, runErr := rt1.Run(ctx, "demo-session", "帮我执行一次计数")
+	s1, sErr := rt1.NewSession(ctx, runtime.SessionOptions{ID: "demo-session"})
+	if sErr != nil {
+		_ = rt1.Close()
+		return sErr
+	}
+	_, runErr := s1.Run(ctx, "帮我执行一次计数")
 	_ = rt1.Close()
 	fmt.Println("进程 1 在第二轮模型调用前死亡，Run 错误:", runErr)
 	fmt.Println("此刻副作用施加次数:", c.count(), "（应为 1）")
@@ -102,7 +107,11 @@ func runDemo(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = rt2.Close() }()
-	res, err := rt2.Run(ctx, "demo-session", "继续")
+	s2, err := rt2.NewSession(ctx, runtime.SessionOptions{ID: "demo-session"})
+	if err != nil {
+		return err
+	}
+	res, err := s2.Run(ctx, "继续")
 	if err != nil {
 		return err
 	}

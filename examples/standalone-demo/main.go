@@ -71,7 +71,11 @@ func runDemo(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	res1, err := rt1.Run(ctx, "demo-session", "开始")
+	s1, err := rt1.NewSession(ctx, runtime.SessionOptions{ID: "demo-session"})
+	if err != nil {
+		return err
+	}
+	res1, err := s1.Run(ctx, "开始")
 	if err != nil {
 		return err
 	}
@@ -92,7 +96,11 @@ func runDemo(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = rt2.Close() }()
-	res2, err := rt2.Run(ctx, "demo-session", "接着来")
+	s2, err := rt2.NewSession(ctx, runtime.SessionOptions{ID: "demo-session"})
+	if err != nil {
+		return err
+	}
+	res2, err := s2.Run(ctx, "接着来")
 	if err != nil {
 		return err
 	}

@@ -16,9 +16,10 @@ sequenceDiagram
     U->>RT: Config{Model, Tools}, "/path/x.db"
     RT->>DB: 打开（WAL 模式，纯 Go 驱动，无 CGO）
     RT->>LP: 装配循环（Emitter → 事件落表）
-    RT-->>U: Runtime（可 Run）
+    RT-->>U: Runtime
     Note over U,LP: 之后每个回合/工具调用都在事务里落 checkpoint
-    U->>LP: Run(ctx, session, 输入)
+    U->>RT: NewSession(ID) → Session
+    U->>LP: session.Run(ctx, 输入)
     LP->>DB: 加载该会话的 checkpoint 快照
     LP-->>U: Result（含跨进程恢复的会话历史）
 ```
@@ -33,7 +34,8 @@ sequenceDiagram
 
 ```go
 rt, err := runtime.NewStandalone(runtime.Config{Model: m, Tools: tools}, "/var/lib/myapp/agent.db")
-res, err := rt.Run(ctx, "session-1", "接着上次的问题继续")
+session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "session-1"})
+res, err := session.Run(ctx, "接着上次的问题继续")
 ```
 
 ::: tip 与 embedded 的关系

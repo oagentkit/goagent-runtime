@@ -73,10 +73,18 @@ rt, err := runtime.NewEmbedded(runtime.Config{   // standalone: NewStandalone(cf
     }},
 })
 if err != nil { ... }
+defer rt.Close()
 
-res, err := rt.Run(ctx, "session-1", "帮我查一下 A 仓库存")
+session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "session-1"})
+if err != nil { ... }
+
+res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 // res.Status / res.Final / res.Rounds / res.ToolCalls / res.Uncertain
 ```
+
+- `sessionID` 是恢复锚点：同一 ID 的多次 `Run` 共享历史，进程重启后同 ID 续跑即从快照恢复。
+- `SessionOptions` 支持会话级覆盖（`System` / `Budget` / `Tools` / `Observer`，nil = 继承 Runtime 级，**只作用于本会话**）。
+- 兼容入口 `rt.Run(ctx, sessionID, user)` 仍在（薄委托到 Session），老调用方零改动。
 
 `chat.Model` 是供应商中立窄接口——任何模型 SDK 包一层适配即可接入，本仓不 import 任何具体供应商。
 
