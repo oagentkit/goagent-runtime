@@ -29,7 +29,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | `observe` | 1 | 33 | `github.com/oekit/concurrency`、`github.com/yi-nology/goagent-kernel` | eventbus → 宿主回调 | README 包表 |
 | `pgstore` | 21 | 3877 | `github.com/jackc/pgx/v5`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） | README 包表 |
 | `pipeline` | 1 | 256 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 工具注册与副作用施加（幂等键/资源/重试安全性映射） | README 包表 |
-| `runtime` | 1 | 201 | `github.com/oagentkit/agent`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
+| `runtime` | 2 | 329 | `github.com/oagentkit/agent`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 模板装配（embedded / standalone） | README 包表 |
 | `sqliteadapter` | 21 | 4196 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel`、`modernc.org/sqlite` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） | README 包表 |
 | `storage` | 3 | 526 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 存储判据面（Provider 契约 + 内存实现；**零驱动边**——纯判据包不带数据库驱动，见 #10） | README 包表 |
 | `storage/sqlitestore` | 1 | 55 | `github.com/yi-nology/goagent-kernel` | standalone 形态的 SQLite Provider 绑定（**驱动边只在这一包**：modernc 驱动不进 `storage` 纯判据包） | README 包表 |
