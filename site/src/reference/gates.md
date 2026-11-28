@@ -13,7 +13,7 @@ title: 门禁体系
 
 | 作业 | 名称 | 判据 | 外部服务 |
 |---|---|---|---|
-| `test` | （无） | 准备 actions/checkout@v4<br>准备 actions/setup-go@v5<br>Vet → `go vet ./...`<br>Build → `CGO_ENABLED=0 go build ./...`<br>Test → `go test ./... -count=1 -timeout 120s -coverprofile=coverage.out`<br>Coverage → `go tool cover -func=coverage.out | tail -1`<br>依赖面门禁（纯判据包不得链数据库驱动） → `bash scripts/check-dep-edges.sh` | 无 |
+| `test` | （无） | 准备 actions/checkout@v4<br>准备 actions/setup-go@v5<br>Vet → `go vet ./...`<br>Build → `CGO_ENABLED=0 go build ./...`<br>五形态样例执行（preset 互为锚，脚本化模型零外网） → `for f in simple workflow react multiagent longrunning; do ; echo "::group::$f" ; CGO_ENABLED=0 go run ./examples/$f ; echo "::endgroup::" ; done`<br>Test → `go test ./... -count=1 -timeout 120s -coverprofile=coverage.out`<br>Coverage → `go tool cover -func=coverage.out | tail -1`<br>依赖面门禁（纯判据包不得链数据库驱动） → `bash scripts/check-dep-edges.sh` | 无 |
 | `race` | race（并发面竞态检测） | 准备 actions/checkout@v4<br>准备 actions/setup-go@v5<br>Race → `CGO_ENABLED=1 go test -race ./... -count=1 -timeout 600s` | 无 |
 | `integration` | integration（PG 参考实现：kernel 共享契约套件 + SIGKILL e2e） | 准备 actions/checkout@v7<br>准备 actions/setup-go@v7<br>PG 契约套件 + 故障恢复 e2e（硬失败，无环境开洞；判据本体归 kernel sidetest/boardtest） → `CGO_ENABLED=0 go test ./pgstore/ -count=1 -timeout 15m -v`（env: `GAK_PGREF_DSN`）<br>cluster 高可用集成（真 PG：双副本抢占 / 崩溃接管不重复施加） → `CGO_ENABLED=0 go test ./cluster/ -count=1 -timeout 15m -v`（env: `GAK_PGREF_DSN`） | postgres（postgres:16-alpine） |
 | `site-links` | 站点内部链接门禁（正文链接自带 base + 目标页面存在） | 准备 actions/checkout@v4<br>准备 actions/setup-node@v4<br>内部链接检查（子路径部署下的 404 防线） → `node site/scripts/check-links.mjs` | 无 |

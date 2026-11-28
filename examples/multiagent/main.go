@@ -11,6 +11,8 @@
 // ——W4 配置分层的直接消费；模型面按会话的 System 提示分流到各自剧本。
 //
 //	CGO_ENABLED=0 go run ./examples/multiagent
+//
+// 生命周期: Experimental（v0.10.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (
@@ -24,6 +26,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/preset"
 	"github.com/yi-nology/goagent-runtime/runtime"
 )
 
@@ -73,7 +76,7 @@ func (edges) DispatchAllow(slug string) []string {
 func main() {
 	ctx := context.Background()
 
-	rt, err := runtime.NewEmbedded(runtime.Config{
+	cfg := runtime.Config{
 		Model: &expertModel{
 			inv: []chat.ChatResponse{
 				{Content: "库存核对：42 件与台账一致，「充足」结论成立"},
@@ -87,11 +90,7 @@ func main() {
 		Tools: []pipeline.Tool{{
 			Name: "noop", Handler: func(context.Context, []byte) (string, error) { return "", nil },
 		}},
-	})
-	if err != nil {
-		log.Fatal(err)
 	}
-	defer func() { _ = rt.Close() }()
 
 	// Handoff 判据：coordinator → 专家 必须在 allow 矩阵里（maxDepth=1 =
 	// 允许一层派发，coordinator 位于深度 0）。拓扑是宿主的编译期事实——
@@ -107,43 +106,30 @@ func main() {
 	board := blackboard.NewBoard()
 	board.Seed("material", "发布说明草稿：A 仓库存 42 件，充足，可立即发货。")
 
-	// 两位专家 = 两个会话（会话级覆盖：各自的 System 与工具面，互不泄漏）。
-	inv, err := rt.NewSession(ctx, runtime.SessionOptions{
-		ID:     "expert-inventory",
-		System: "你是库存专家：只核对数量与库存结论，输出一条核对发现。",
-		Tools: []pipeline.Tool{{Name: "noop",
-			Handler: func(context.Context, []byte) (string, error) { return "", nil }}},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	copyExpert, err := rt.NewSession(ctx, runtime.SessionOptions{
-		ID:     "expert-copy",
-		System: "你是文案专家：只审表述与单位规范，输出一条修改建议。",
-		Tools: []pipeline.Tool{{Name: "noop",
-			Handler: func(context.Context, []byte) (string, error) { return "", nil }}},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// 专家 Act：观察黑板增量 → 与己相关则贡献（各自跑自己的 Run）。
-	specialists := []blackboard.Specialist{
+	// 两位专家 = 两份装配（会话级 System/工具面互不泄漏）——「无补充」这类
+	// 内容谓词是宿主词表，经 Filter 注入（preset 不解释语义）。
+	experts := []preset.Expert{
 		{
-			Name: "库存专家",
-			Act: func(ctx context.Context, b *blackboard.Board, since int64) (bool, error) {
-				return contribute(ctx, b, since, inv, "库存专家")
-			},
+			ID:     "expert-inventory",
+			Name:   "库存专家",
+			System: "你是库存专家：只核对数量与库存结论，输出一条核对发现。",
+			Tools: []pipeline.Tool{{Name: "noop",
+				Handler: func(context.Context, []byte) (string, error) { return "", nil }}},
+			Filter: func(final string) bool { return !strings.Contains(final, "无补充") },
 		},
 		{
-			Name: "文案专家",
-			Act: func(ctx context.Context, b *blackboard.Board, since int64) (bool, error) {
-				return contribute(ctx, b, since, copyExpert, "文案专家")
-			},
+			ID:     "expert-copy",
+			Name:   "文案专家",
+			System: "你是文案专家：只审表述与单位规范，输出一条修改建议。",
+			Tools: []pipeline.Tool{{Name: "noop",
+				Handler: func(context.Context, []byte) (string, error) { return "", nil }}},
+			Filter: func(final string) bool { return !strings.Contains(final, "无补充") },
 		},
 	}
 
-	result, err := blackboard.Convene(ctx, board, specialists, &blackboard.ConveneOptions{MaxRounds: 2})
+	// 会话装配 + 贡献闭包 + Convene 轮转由 preset.MultiAgent 收口（互为锚）；
+	// 轮次用 preset 默认（=2，与本样例原口径一致）。
+	result, err := preset.MultiAgent(ctx, cfg, experts, board, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -152,27 +138,4 @@ func main() {
 	for _, e := range board.Entries() {
 		fmt.Printf("  [%d] %s/%s: %s\n", e.Seq, e.Author, e.Kind, e.Content)
 	}
-}
-
-// contribute 专家贡献一次：读增量 → 跑会话 Run → 写发现。
-func contribute(ctx context.Context, b *blackboard.Board, since int64,
-	session *runtime.Session, expert string) (bool, error) {
-
-	news := b.EntriesAfter(since)
-	if len(news) == 0 {
-		return false, nil // 无增量：本专家本轮无事可做
-	}
-	var sb strings.Builder
-	for _, e := range news {
-		fmt.Fprintf(&sb, "- [%s/%s] %s\n", e.Author, e.Kind, e.Content)
-	}
-	res, err := session.Run(ctx, "观察以下黑板增量，给出你的发现：\n"+sb.String())
-	if err != nil {
-		return false, err
-	}
-	if strings.Contains(res.Final, "无补充") {
-		return false, nil
-	}
-	b.Write(expert, "finding", res.Final)
-	return true, nil
 }

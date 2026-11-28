@@ -121,6 +121,7 @@ res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 | `sqliteadapter` | SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源） |
 | `pgstore` | PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入） |
 | `runtime` | 模板装配（embedded / standalone） |
+| `preset` | 五形态标准装配（ADR-004 (a) 路径：Simple/ReAct/Workflow 步骤/MultiAgent/Longrunning——真装配非转发，与 `examples/` 五形态样例互为锚） |
 | `cluster` | 多副本模板装配（PG + worker 池：认领/租约/接管代次、跨副本事件面） |
 | `observe` | eventbus → 宿主回调（薄转发，不 Interpret 语义） |
 | `trace` | Trace 读模型：事件流 → Session/Run/Turn/ToolCall 层级投影 + 运营八问查询（#42） |

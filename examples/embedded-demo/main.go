@@ -5,6 +5,8 @@
 // 「施加次数」就是「副作用发生次数」——恢复后它必须仍是 1。
 //
 //	CGO_ENABLED=0 go run ./examples/embedded-demo
+//
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (

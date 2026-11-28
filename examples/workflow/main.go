@@ -8,6 +8,8 @@
 // 不抢跑、不自造执行器。
 //
 //	CGO_ENABLED=0 go run ./examples/workflow
+//
+// 生命周期: Experimental（v0.10.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (
@@ -18,6 +20,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/preset"
 	"github.com/yi-nology/goagent-runtime/runtime"
 )
 
@@ -54,24 +57,18 @@ func main() {
 	fmt.Printf("Step 2 校验: 通过（qty=%d）\n", order.qty)
 
 	// Step 3：汇总（固定流程里嵌一个 Run——语言能力只出现在这一步）。
-	rt, err := runtime.NewEmbedded(runtime.Config{
+	// 定步骨架是宿主的代码（真定步执行器归 runtime#39，本样例不抢跑）；
+	// 这一步的装配→会话→Run→Close 走 preset.Simple（与 simple 形态互为锚）。
+	cfg := runtime.Config{
 		Model: &scriptModel{steps: []chat.ChatResponse{
 			{Content: "订单 #1024 校验通过：A 仓 42 件，可直接履约"},
 		}},
 		Tools: []pipeline.Tool{{
 			Name: "noop", Handler: func(context.Context, []byte) (string, error) { return "", nil },
 		}},
-	})
-	if err != nil {
-		log.Fatal(err)
 	}
-	defer func() { _ = rt.Close() }()
 
-	session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "workflow"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	res, err := session.Run(ctx, "一句话汇总这份订单："+raw)
+	res, err := preset.Simple(ctx, cfg, "workflow", "一句话汇总这份订单："+raw)
 	if err != nil {
 		log.Fatal(err)
 	}

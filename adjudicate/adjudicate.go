@@ -18,6 +18,7 @@
 // 领域裁决器（认识什么 Key、查什么下游证据）全注入：本包零业务词。
 // 周期调度不在此处起 goroutine——由宿主 bootstrap 的 ticker/worker 管理，
 // Loop.ReconcileOnce 是无副作用单轮（可手动触发可周期触发）。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package adjudicate
 
 import (

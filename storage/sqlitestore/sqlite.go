@@ -6,6 +6,7 @@
 // 任何只想要内存 Provider 的消费方（如 bianque，其 repo 层已用 glebarez
 // 注册同名 driver）链接期撞上「Register called twice for driver sqlite」
 // 启动 panic。驱动绑定归绑定包：只要不 import 本包，就零驱动边。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package sqlitestore
 
 import (

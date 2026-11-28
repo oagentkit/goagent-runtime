@@ -16,6 +16,15 @@ jobs:
         run: go vet ./...
       - name: Build
         run: CGO_ENABLED=0 go build ./...
+      - name: 五形态样例执行（preset 互为锚，脚本化模型零外网）
+        # ADR-004 §四 conformance 第一件：样例 go run 常绿——preset 改坏 ⇒ 此步红。
+        # 每个样例 main 内部 log.Fatal 即非零退出，循环遇错即停。
+        run: |
+          for f in simple workflow react multiagent longrunning; do
+            echo "::group::$f"
+            CGO_ENABLED=0 go run ./examples/$f
+            echo "::endgroup::"
+          done
       - name: Test
         run: go test ./... -count=1 -timeout 120s -coverprofile=coverage.out
       - name: Coverage

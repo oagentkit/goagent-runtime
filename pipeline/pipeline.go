@@ -15,6 +15,7 @@
 //
 // 模型请求未注册的工具 ⇒ OutcomeRefused，不执行任何东西。判据与
 // kernel 同方向：要求无满足者即拒绝，绝不降级成「猜一个差不多的」。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package pipeline
 
 import (

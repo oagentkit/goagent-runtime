@@ -12,6 +12,8 @@
 //  3. **工具调用 ID 由 loop 铸造**（见 agentloop 的 NewID 注入点）：
 //     ID 是幂等键的原材料，必须由编排侧生成并在恢复后保持一致，
 //     不能让模型供应商自由发挥。
+//
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package chat
 
 import "context"

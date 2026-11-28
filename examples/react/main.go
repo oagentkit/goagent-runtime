@@ -4,6 +4,8 @@
 // 每个 Turn 由模型自主决定调不调工具、调哪个。
 //
 //	CGO_ENABLED=0 go run ./examples/react
+//
+// 生命周期: Experimental（v0.10.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (
@@ -13,6 +15,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/preset"
 	"github.com/yi-nology/goagent-runtime/runtime"
 )
 
@@ -35,7 +38,7 @@ func (m *scriptModel) Chat(_ context.Context, _ chat.ChatRequest) (chat.ChatResp
 func main() {
 	ctx := context.Background()
 
-	rt, err := runtime.NewEmbedded(runtime.Config{
+	cfg := runtime.Config{
 		Model: &scriptModel{steps: []chat.ChatResponse{
 			// Turn 1：模型自主决定先查库存。
 			{ToolCalls: []chat.ToolCall{{ID: "c1", Name: "lookup", Arguments: `{"sku":"A"}`}}},
@@ -52,17 +55,10 @@ func main() {
 				return "3 箱", nil
 			}},
 		},
-	})
-	if err != nil {
-		log.Fatal(err)
 	}
-	defer func() { _ = rt.Close() }()
 
-	session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "react"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	res, err := session.Run(ctx, "A 仓库存够不够发一车？")
+	// 多轮工具循环：ReAct 形态的额度口径（零值 Budget 补默认上限）由 preset 给。
+	res, err := preset.ReAct(ctx, cfg, "react", "A 仓库存够不够发一车？")
 	if err != nil {
 		log.Fatal(err)
 	}
