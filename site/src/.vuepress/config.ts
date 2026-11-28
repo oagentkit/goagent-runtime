@@ -136,7 +136,7 @@ export default defineUserConfig({
     footer: 'MIT License · github.com/yi-nology/goagent-runtime · <a href="https://yi-nology.github.io/goagent-runtime/llms.txt">AI 直读 llms.txt</a>',
     sidebar: {
       '/guide/': [
-        { text: '入门', children: ['/guide/', '/guide/quickstart.html', '/guide/architecture.html', '/guide/concepts.html'] },
+        { text: '入门', children: ['/guide/', '/guide/quickstart.html', '/guide/entries.html', '/guide/architecture.html', '/guide/concepts.html'] },
       ],
       '/packages/': [
         { text: '包导览', children: ['/packages/', '/packages/chat.html', '/packages/pipeline.html', '/packages/agentloop.html', '/packages/storage.html', '/packages/sqlite-pg.html', '/packages/runtime.html', '/packages/observe.html'] },
