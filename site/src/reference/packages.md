@@ -11,7 +11,7 @@ title: 机器事实（包 × 依赖 × 能力）
 要改事实请改源头文件——**手抄一遍就等于多一份会静默失真的真相**。
 :::
 
-## 包清单（15 个包）
+## 包清单（16 个包）
 
 依赖列只列仓外 import；「无」表示只用标准库与本仓包。
 生产行数 = 非测试 .go 文件的非空行数（含注释）。
@@ -20,6 +20,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | 包 | 生产文件 | 生产行数 | 仓外依赖 | 职责 | 职责来源 |
 |---|---|---|---|---|---|
 | `adjudicate` | 1 | 234 | `github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 副作用未知态的周期裁决（证据回查 → 三态判定 → 落裁决；#1） | README 包表 |
+| `agentiface` | 3 | 170 | `github.com/oagentkit/agent`、`github.com/yi-nology/goagent-kernel` | 三入口 → `oagentkit/agent/iface` 窄接口适配器（agentloop / contract 边界两形态；agent#174——接口本体在 Agent 层，只有装配层能同时看见三套语义） | README 包表 |
 | `agentloop` | 4 | 1377 | `github.com/oagentkit/agent`、`github.com/oekit/pkg`、`github.com/yi-nology/goagent-kernel` | 可恢复回合循环（预算守卫 + 检查点 + 事件） | README 包表 |
 | `bridge/einotool` | 1 | 75 | `github.com/cloudwego/eino/components/tool` | 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜，宿主按业务补） | README 包表 |
 | `bridge/llmchat` | 1 | 217 | `github.com/cloudwego/eino/components/model`、`github.com/cloudwego/eino/schema`、`github.com/eino-contrib/jsonschema`、`github.com/oagentkit/llm` | 家族钦定适配器：`oagentkit/llm`（eino 栈）→ `chat.Model`（**嵌套模块**——LLM SDK 边只在 bridge 内，主 module 零 LLM SDK import 的声明面不变） | README 包表 |
@@ -42,6 +43,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | 包 | 在 README「包」表 | 在磁盘 |
 |---|---|---|
 | `adjudicate` | ✓ | ✓ |
+| `agentiface` | ✓ | ✓ |
 | `agentloop` | ✓ | ✓ |
 | `bridge/einotool` | ✓ | ✓ |
 | `bridge/llmchat` | ✓ | ✓ |
@@ -57,7 +59,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | `storage/sqlitestore` | ✓ | ✓ |
 | `trace` | ✓ | ✓ |
 
-两处清单**完全一致**（15/15）。
+两处清单**完全一致**（16/16）。
 
 ## 依赖（go.mod）
 
@@ -66,7 +68,7 @@ title: 机器事实（包 × 依赖 × 能力）
 | 模块 | 版本 | 直接 / 间接 |
 |---|---|---|
 | `github.com/jackc/pgx/v5` | `v5.13.0` | 直接 |
-| `github.com/oagentkit/agent` | `v0.16.0` | 直接 |
+| `github.com/oagentkit/agent` | `v0.17.0` | 直接 |
 | `github.com/oagentkit/guardx` | `v0.30.0` | 直接 |
 | `github.com/oekit/concurrency` | `v0.40.0` | 直接 |
 | `github.com/oekit/pkg` | `v0.61.5` | 直接 |
