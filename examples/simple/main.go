@@ -3,6 +3,8 @@
 // 七词词汇侧重：Run（一次执行）。
 //
 //	CGO_ENABLED=0 go run ./examples/simple
+//
+// 生命周期: Experimental（v0.10.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (
@@ -12,6 +14,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/preset"
 	"github.com/yi-nology/goagent-runtime/runtime"
 )
 
@@ -33,8 +36,8 @@ func (m *scriptModel) Chat(_ context.Context, _ chat.ChatRequest) (chat.ChatResp
 func main() {
 	ctx := context.Background()
 
-	// 1) 装配：一个模型 + 一个工具。
-	rt, err := runtime.NewEmbedded(runtime.Config{
+	// 1) 装配面：一个模型 + 一个工具（宿主注入——preset 不含领域概念）。
+	cfg := runtime.Config{
 		Model: &scriptModel{steps: []chat.ChatResponse{
 			{ToolCalls: []chat.ToolCall{{ID: "c1", Name: "lookup", Arguments: `{"sku":"A"}`}}},
 			{Content: "A 仓：42 件"},
@@ -46,18 +49,10 @@ func main() {
 				return "A 仓：42 件", nil
 			},
 		}},
-	})
-	if err != nil {
-		log.Fatal(err)
 	}
-	defer func() { _ = rt.Close() }()
 
-	// 2) 打开会话，跑一个 Run。
-	session, err := rt.NewSession(ctx, runtime.SessionOptions{ID: "simple"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	res, err := session.Run(ctx, "查一下 A 仓库存")
+	// 2) 一次性执行：装配→会话→Run→Close 由 preset.Simple 收口（互为锚）。
+	res, err := preset.Simple(ctx, cfg, "simple", "查一下 A 仓库存")
 	if err != nil {
 		log.Fatal(err)
 	}

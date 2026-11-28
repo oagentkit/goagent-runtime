@@ -8,6 +8,7 @@
 // runtime 副作用闸的语义面，eino 的 ToolInfo 表达不了——适配器**不猜**：
 // 全部落零值（ Safe=false / NeedsApproval=false / 无幂等键），副作用闸语义
 // 宿主在装配侧按业务补（见 pipeline.Tool 文档）。适配器的职责只有形状转换。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package einotool
 
 import (

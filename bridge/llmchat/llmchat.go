@@ -15,6 +15,7 @@
 // 返回的若是 llm 的 FailoverModel，首块前失败仍会切模型；若是普通模型，
 // 则无降级——这是 llm.Generator.RawModel() 接口的既有契约，本包不另造
 // 第二套降级。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package llmchat
 
 import (
@@ -27,8 +28,8 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	ejsonschema "github.com/eino-contrib/jsonschema"
-	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/oagentkit/llm"
+	"github.com/yi-nology/goagent-runtime/chat"
 )
 
 // Option 桥接选项。

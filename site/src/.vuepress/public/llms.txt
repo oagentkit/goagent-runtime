@@ -41,13 +41,13 @@
 
 ## 事实快照
 - 模块: `github.com/yi-nology/goagent-runtime` · Go `1.27.4` · MIT
-- 能力包 16 个（生产代码 14898 行 / 75 个文件）
+- 能力包 17 个（生产代码 15096 行 / 76 个文件）
 - kernel 地板版本: `v0.80.0`；判据全部来自 kernel 契约面
 - 第一方依赖 7 个（直接）/ 15 个（间接）
 - 模板: `NewEmbedded`（内存）/ `NewStandalone`（SQLite 单文件）/ `cluster`（PG + worker 池，多副本）
 - 已发布版本 17 个，最新 `v0.9.0`；决策记录 11 篇
 
-## 包一览（16）
+## 包一览（17）
 - `adjudicate` — 副作用未知态的周期裁决（证据回查 → 三态判定 → 落裁决
 - `agentiface` — 三入口 → `oagentkit/agent/iface` 窄接口适配器（agentloop / contract 边界…
 - `agentloop` — 可恢复回合循环（预算守卫 + 检查点 + 事件）
@@ -59,6 +59,7 @@
 - `observe` — eventbus → 宿主回调（薄转发，不 Interpret 语义）
 - `pgstore` — PostgreSQL 参考实现：11 面统一门面 + SIGKILL 故障恢复 e2e（自 kernel 迁入）
 - `pipeline` — 工具注册与副作用施加（幂等键/资源/重试安全性映射）
+- `preset` — 五形态标准装配（ADR-004 (a) 路径：Simple/ReAct/Workflow 步骤/MultiAgent/L…
 - `runtime` — 模板装配（embedded / standalone）
 - `sqliteadapter` — SQLite（WAL）参考实现：11 面统一门面（自 kernel 迁入，判据套件同源）
 - `storage` — 存储判据面（Provider 契约 + 内存实现

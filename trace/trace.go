@@ -44,6 +44,7 @@
 //
 // 事件命名法与词表单源的裁决（snake_case 为法 / `agent.*` 冻结不扩张 /
 // run 身份走载荷键不新造事件族 / worker 身份留任务板）见 ADR-0011。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package trace
 
 import (

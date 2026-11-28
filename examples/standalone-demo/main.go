@@ -4,6 +4,8 @@
 // 库文件、同一 sessionID 续跑——历史从 SQLite 恢复，不丢上下文。
 //
 //	CGO_ENABLED=0 go run ./examples/standalone-demo
+//
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (

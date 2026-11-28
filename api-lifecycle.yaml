@@ -1,0 +1,120 @@
+# goagent-runtime API 生命周期清单
+#
+# 双面设计（判定单源 matrix-tools ADR-002，与 kernel api-lifecycle 同一口径）：
+# 本文件既是声明面（每个生产包的稳定性分级 + 定级理由），也是可执行面
+# （matrix-tools scripts/verify_api_lifecycle.py 逐条校验：清单自洽 +
+# 源码生产包↔清单双向覆盖 + 包注释 `// 生命周期: <级别>` 标记对账）。
+#
+# 分级语义见 matrix-tools docs/adr/ADR-002 与 kernel docs/api-compat.md：
+#   - Experimental：可随时改、删、拆，0.x 阶段全仓按 org 通行约定演进；
+#   - Stable：只允许 additive；Deprecated：须给替代符号。
+#
+# 纪律：新增生产包 ⇒ 本清单同步登记 + 包注释打标记（双向判据，缺一即红）。
+
+version: 1
+
+packages:
+  - pkg: adjudicate
+    level: Experimental
+    since: v0.9.0
+    reason: 裁决执行件（判定/对账面）——随契约套件与裁决语义演进
+  - pkg: agentiface
+    level: Experimental
+    since: v0.10.0
+    reason: ADR-003 统一执行接口的跨仓适配面——随 agent#174 波次引入，0.x 按 org 通行约定演进
+  - pkg: agentloop
+    level: Experimental
+    since: v0.9.0
+    reason: 循环引擎（Run/Turn 推进与额度挂点）——核心执行面，0.x 阶段语义仍会 additive 演进
+  - pkg: bridge/einotool
+    level: Experimental
+    since: v0.9.0
+    reason: LLM SDK 边适配（嵌套模块）——SDK 契约随上游演进，只承诺边界的可替换性
+  - pkg: bridge/llmchat
+    level: Experimental
+    since: v0.9.0
+    reason: chat 面适配（嵌套模块）——同 einotool：模型供应商面演进中
+  - pkg: chat
+    level: Experimental
+    since: v0.9.0
+    reason: 模型调用中立面（请求/响应词表）——供应商与流式形态仍在演进
+  - pkg: cluster
+    level: Experimental
+    since: v0.9.0
+    reason: 多副本高可用装配（认领/租约/接管代次）——随真实部署形态与故障注入结论演进
+  - pkg: containerbackend
+    level: Experimental
+    since: v0.9.0
+    reason: 参考实现（docker/k8s 执行引擎）——随契约与真实引擎形态演进（v0.9.0 定级基线）
+  - pkg: examples/embedded-demo
+    level: Experimental
+    since: v0.9.0
+    reason: 教学样例（内嵌形态）——随入口形态演进，不承诺稳定
+  - pkg: examples/longrunning
+    level: Experimental
+    since: v0.10.0
+    reason: 教学样例（Long-running 形态，preset.Longrunning 互为锚）——不承诺稳定
+  - pkg: examples/multiagent
+    level: Experimental
+    since: v0.10.0
+    reason: 教学样例（Multi-Agent 形态，preset.MultiAgent 互为锚）——不承诺稳定
+  - pkg: examples/react
+    level: Experimental
+    since: v0.10.0
+    reason: 教学样例（ReAct 形态，preset.ReAct 互为锚）——不承诺稳定
+  - pkg: examples/reference-runtime
+    level: Experimental
+    since: v0.9.0
+    reason: 参考运行时样例（六段生命周期接线）——随契约与部署形态演进
+  - pkg: examples/simple
+    level: Experimental
+    since: v0.10.0
+    reason: 教学样例（Simple 形态，preset.Simple 互为锚）——不承诺稳定
+  - pkg: examples/standalone-demo
+    level: Experimental
+    since: v0.9.0
+    reason: 教学样例（独立进程形态）——随入口形态演进，不承诺稳定
+  - pkg: examples/worker-runtime
+    level: Experimental
+    since: v0.9.0
+    reason: 教学样例（worker 生命周期六段接线）——随生命周期契约演进，不承诺稳定
+  - pkg: examples/workflow
+    level: Experimental
+    since: v0.10.0
+    reason: 教学样例（Workflow 形态，语言步骤走 preset.Simple）——定步执行器归 runtime#39，不承诺稳定
+  - pkg: observe
+    level: Experimental
+    since: v0.9.0
+    reason: 事件观测回调面——随 kernel 事件词表与 trace 投影演进
+  - pkg: pgstore
+    level: Experimental
+    since: v0.9.0
+    reason: 参考实现（PG 持久化）——随契约套件与参考部署演进（v0.9.0 定级基线）
+  - pkg: pipeline
+    level: Experimental
+    since: v0.9.0
+    reason: 工具装配与副作用施加面——随幂等键/审批闸契约演进
+  - pkg: preset
+    level: Experimental
+    since: v0.10.0
+    reason: ADR-004 (a) 路径的五形态标准装配（真装配非转发）——与 examples 五形态样例互为锚，conformance 三件见 ADR-004 §四（runtime#55）
+  - pkg: runtime
+    level: Experimental
+    since: v0.9.0
+    reason: 装配层根面（NewEmbedded/NewStandalone/Session）——0.x 主入口，只承诺 additive 演进方向
+  - pkg: sqliteadapter
+    level: Experimental
+    since: v0.9.0
+    reason: 参考实现（SQLite 单文件持久化）——随契约套件演进（v0.9.0 定级基线）
+  - pkg: storage
+    level: Experimental
+    since: v0.9.0
+    reason: 存储中立面（Provider 与快照读写）——随 checkpoint 契约演进
+  - pkg: storage/sqlitestore
+    level: Experimental
+    since: v0.9.0
+    reason: SQLite 存储实现——随存储契约与恢复判据演进
+  - pkg: trace
+    level: Experimental
+    since: v0.9.0
+    reason: 运行时可观测读模型（#42 W5 投影面）——新面，随消费方与事件词表演进

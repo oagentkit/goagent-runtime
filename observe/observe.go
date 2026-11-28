@@ -3,6 +3,7 @@
 // kernel 的 eventbus 给广播与持久化判据；本包只做一件事：订阅并把事件
 // 转发给宿主的 Sink（日志/指标/审计各自实现 Sink 即可）。不做过滤、
 // 不做采样、不 Interpret 事件语义——那是宿主的事。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package observe
 
 import (

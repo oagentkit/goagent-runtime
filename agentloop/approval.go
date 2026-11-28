@@ -6,6 +6,7 @@
 // waiting_approval（verifyHistory 的放行面只认这一种形态，更早消息的
 // 未答复仍是篡改，fail-closed 不变）。状态词面=kernel contract 既有
 // StatusWaitingApproval（Open 态），不 runtime 侧自造。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package agentloop
 
 import (

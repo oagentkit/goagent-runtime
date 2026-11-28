@@ -21,6 +21,8 @@
 //     接管代次，走 kernel taskboard 判据）；副本崩了别的副本接管重跑，已
 //     施加的副作用不重复施加（前提是宿主声明业务幂等键，见
 //     pipeline.Tool.IdempotencyKey）。
+//
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package runtime
 
 import (

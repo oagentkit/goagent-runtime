@@ -50,6 +50,7 @@
 // agentloop.Loop 的快照序号是**进程内单调游标**，同一 Loop 的 Run 不得并发
 // 调用——本包的 worker 池**每个 worker 独占一个 Loop 实例**，互不共用；
 // 同一会话也不会被两个 worker 同时执行（认领 + 租约保证）。
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package cluster
 
 import (

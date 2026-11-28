@@ -7,6 +7,8 @@
 // 两次 Run 之间用 Session.Status() 读得到（failed → 恢复后 succeeded）。
 //
 //	CGO_ENABLED=0 go run ./examples/longrunning
+//
+// 生命周期: Experimental（v0.10.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package main
 
 import (
@@ -17,6 +19,7 @@ import (
 
 	"github.com/yi-nology/goagent-runtime/chat"
 	"github.com/yi-nology/goagent-runtime/pipeline"
+	"github.com/yi-nology/goagent-runtime/preset"
 	"github.com/yi-nology/goagent-runtime/runtime"
 	"github.com/yi-nology/goagent-runtime/storage"
 )
@@ -77,48 +80,33 @@ func main() {
 
 	// ── Interrupt：Run 中途被模型错误中断（快照已持久化，副作用已施加 1 次）。
 	fmt.Println("── Interrupt ──")
-	rt1, err := runtime.NewEmbedded(runtime.Config{
+	cfg1 := runtime.Config{
 		Model: &scriptModel{errAt: 1, steps: []chat.ChatResponse{
 			{ToolCalls: []chat.ToolCall{{ID: "c1", Name: "report", Arguments: "{}"}}},
 		}},
 		Tools: tools,
-	}, runtime.WithStorage(mem))
-	if err != nil {
-		log.Fatal(err)
 	}
-	s1, err := rt1.NewSession(ctx, runtime.SessionOptions{ID: "longrun"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, runErr := s1.Run(ctx, "生成周报")
-	st, _ := s1.Status(ctx)
+	// preset.Longrunning 把「同 store 同 sessionID 即恢复」的装配口径收进来，
+	// 状态面随结果返回（Close 前取——中断时状态正是要看的）。
+	_, st, runErr := preset.Longrunning(ctx, cfg1, mem, "longrun", "生成周报")
 	fmt.Printf("Run 被中断: %v\n", runErr)
 	fmt.Printf("Status: exists=%v status=%s（失败原因已落事件面）\n", st.Exists, st.Status)
 	fmt.Printf("副作用施加次数: %d（中断前已施加）\n", ctr.count())
-	_ = rt1.Close()
 
 	// ── Resume：同 sessionID 再 Run，从快照恢复；工具重放只判 replayed。
 	fmt.Println("── Resume ──")
-	rt2, err := runtime.NewEmbedded(runtime.Config{
+	cfg2 := runtime.Config{
 		Model: &scriptModel{errAt: -1, steps: []chat.ChatResponse{
 			{ToolCalls: []chat.ToolCall{{ID: "c1", Name: "report", Arguments: "{}"}}},
 			{Content: "周报已生成（含上次已施加的报告数据）"},
 		}},
 		Tools: tools,
-	}, runtime.WithStorage(mem))
+	}
+	// 同一 store + 同一 sessionID 再调 = 从快照恢复（preset.Longrunning 的装配口径）。
+	res, st2, err := preset.Longrunning(ctx, cfg2, mem, "longrun", "继续")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() { _ = rt2.Close() }()
-	s2, err := rt2.NewSession(ctx, runtime.SessionOptions{ID: "longrun"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	res, err := s2.Run(ctx, "继续")
-	if err != nil {
-		log.Fatal(err)
-	}
-	st2, _ := s2.Status(ctx)
 	fmt.Printf("Resume 结果: status=%s\n", res.Status)
 	fmt.Printf("Status: status=%s seq=%d\n", st2.Status, st2.Seq)
 	fmt.Printf("副作用施加次数: %d（恢复重放不重复施加，应仍为 1）\n", ctr.count())

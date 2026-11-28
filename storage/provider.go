@@ -10,6 +10,8 @@
 //  3. sqlitestore.Open 给 standalone 形态（独立子包：modernc 驱动边不进本纯化包）（真 SQLite WAL，直接复用本仓的
 //     sqliteadapter 参考实现——runtime 是装配层，import 参考实现
 //     正是它的职责；kernel 仓「内核包不拖驱动」的纪律管不到这里）。
+//
+// 生命周期: Experimental（v0.9.0 定级基线；ADR-004 波次接入 api-lifecycle 清单）
 package storage
 
 import (
