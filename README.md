@@ -127,6 +127,7 @@ res, err := session.Run(ctx, "帮我查一下 A 仓库存")
 | `containerbackend` | 容器执行后端参考实现（Docker / K8s Job）——**宿主抄它，不 import 它** |
 | `bridge/llmchat` | 家族钦定适配器：`oagentkit/llm`（eino 栈）→ `chat.Model`（**嵌套模块**——LLM SDK 边只在 bridge 内，主 module 零 LLM SDK import 的声明面不变） |
 | `bridge/einotool` | 家族钦定适配器：eino `tool.InvokableTool` → `pipeline.Tool`（副作用闸字段不猜，宿主按业务补） |
+| `agentiface` | 三入口 → `oagentkit/agent/iface` 窄接口适配器（agentloop / contract 边界两形态；agent#174——接口本体在 Agent 层，只有装配层能同时看见三套语义） |
 
 ## 判据的归属（不发明第二套）
 
