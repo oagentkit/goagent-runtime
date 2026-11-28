@@ -36,6 +36,7 @@ import (
 	"github.com/oagentkit/agent/roundguard"
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/invocation"
 
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/chat"
@@ -66,6 +67,14 @@ type Config struct {
 	// 装配闸——否则装配直接失败（fail-closed）。装配层不提供「默认放行」
 	// 这条路：审批被静默绕过是安全缺陷。
 	ApprovalGate agentloop.ApprovalGateFunc
+	// Journal 工具调用账本（kernel invocation.Store 契约；可选，nil = 不落账本）。
+	//
+	// 装上它，本 Runtime 的所有会话获得「崩溃后按账本续跑」的能力：执行前
+	// 把调用身份（callID + 工具名 + 参数摘要）落到账本；恢复时按账本续跑，
+	// **不再问模型要那次调用**——模型重新生成会换 callID，幂等键跟着变，
+	// 同一业务动作就可能被再施加一遍（账本补的就是这段）。nil = 退化为旧
+	// 语义（历史快照单独保证幂等键）。
+	Journal invocation.Store
 }
 
 // Runtime 装配完成的运行时。
@@ -297,6 +306,8 @@ func (r *Runtime) buildLoop(opts SessionOptions) (*agentloop.Loop, error) {
 		Budget:       budget,
 		System:       system,
 		ApprovalGate: r.cfg.ApprovalGate,
+		Journal:      r.cfg.Journal,
+		Reconcile:    opts.Reconcile,
 	})
 }
 

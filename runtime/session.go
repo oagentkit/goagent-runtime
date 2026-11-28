@@ -8,6 +8,7 @@ import (
 	"github.com/oagentkit/agent/roundguard"
 	"github.com/yi-nology/goagent-kernel/checkpoint"
 	"github.com/yi-nology/goagent-kernel/eventbus"
+	"github.com/yi-nology/goagent-kernel/invocation"
 
 	"github.com/yi-nology/goagent-runtime/agentloop"
 	"github.com/yi-nology/goagent-runtime/observe"
@@ -45,6 +46,14 @@ type SessionOptions struct {
 	// 按 sessionID 过滤（只收本会话事件）。detach 归 Runtime.Close——
 	// 会话对象没有 Close。
 	Observer observe.Sink
+	// Reconcile 本会话的账目裁决钩子（kernel invocation 契约的宿主裁决面；
+	// 可选，nil = 不裁决——恢复遇到 uncertain/executing 账目时只报告不裁决）。
+	//
+	// 判据归 kernel（Recovery 判「要做什么」），怎么裁决是宿主的事：远端到底
+	// 生效没有，只有宿主知道。做成**会话级覆盖**的原因：裁决语义依赖工具集
+	// （纯只读工具集恢复重做不可能重复副作用，可自动放行；含变更类工具集
+	// 「变更类不猜」），宿主按步骤工具集决定装不装。
+	Reconcile func(ctx context.Context, sessionID string, e invocation.Entry) (invocation.State, []byte, error)
 }
 
 // SessionStatus 会话状态读数（投影自已落库的 checkpoint 快照）。
@@ -146,7 +155,7 @@ func (r *Runtime) NewSession(_ context.Context, opts SessionOptions) (*Session, 
 		return nil, err
 	}
 	s := &Session{rt: r, id: opts.ID}
-	if opts.System != "" || opts.Budget != nil || opts.Tools != nil {
+	if opts.System != "" || opts.Budget != nil || opts.Tools != nil || opts.Reconcile != nil {
 		loop, err := r.buildLoop(opts)
 		if err != nil {
 			return nil, errors.Wrap(err, "会话覆盖装配失败", "session", opts.ID)
