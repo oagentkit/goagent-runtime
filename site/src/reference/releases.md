@@ -11,6 +11,7 @@ title: 版本记录
 
 | 版本 | 日期 | 主题 |
 |---|---|---|
+| `v0.9.0` | 2026-11-28 | 新增(trace)：统一 Trace 可观测——run_id 贯通 + Session/Run/Turn 读模型 + 运营八问（#42 W5） |
 | `v0.8.0` | 2026-11-26 | 新增(cluster)：claimNext 单次 Claim + README 裁定段（#24 方案 C①） |
 | `v0.7.1` | 2026-11-26 | 构建：依赖地板追到最新——kernel v0.78.0 / guardx v0.30.0 / pkg v0.61.5（入驻 oagentkit 矩阵后的地板时效对齐） |
 | `v0.7.0` | 2026-11-26 | 新增(agentloop)：接上工具调用账本——执行前落 planned、恢复按账本续跑 |
